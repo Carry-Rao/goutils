@@ -7,7 +7,7 @@ import (
 )
 
 type File struct {
-	Level int
+	Level Level
 	file  *os.File
 }
 
@@ -65,6 +65,6 @@ func (f *File) Panic(p ...any) {
 	panic(p)
 }
 
-func (f *File) SetLevel(level int) {
+func (f *File) SetLevel(level Level) {
 	f.Level = level
 }

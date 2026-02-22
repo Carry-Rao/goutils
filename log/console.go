@@ -8,7 +8,7 @@ import (
 
 type Console struct {
 	IsStdout bool
-	Level    int
+	Level    Level
 }
 
 func NewConsole(stdout bool) *Console {
@@ -95,6 +95,6 @@ func (c *Console) Panic(p ...any) {
 	panic(p)
 }
 
-func (c *Console) SetLevel(level int) {
+func (c *Console) SetLevel(level Level) {
 	c.Level = level
 }

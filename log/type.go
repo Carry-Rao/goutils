@@ -4,6 +4,8 @@ import (
 	"os"
 )
 
+type Level int
+
 type Logger interface {
 	Debug(p ...any)
 	Info(p ...any)
@@ -11,7 +13,7 @@ type Logger interface {
 	Error(p ...any)
 	Fatal(p ...any)
 	Panic(p ...any)
-	SetLevel(level int)
+	SetLevel(level Level)
 }
 
 func NewFileLogger(path string) Logger {
@@ -27,10 +29,10 @@ func NewConsoleLogger(stdout bool) Logger {
 }
 
 const (
-	Debug = 0
-	Info  = 1
-	Warn  = 2
-	Error = 3
-	Fatal = 4
-	Panic = 5
+	Debug Level = 0
+	Info  Level = 1
+	Warn  Level = 2
+	Error Level = 3
+	Fatal Level = 4
+	Panic Level = 5
 )
