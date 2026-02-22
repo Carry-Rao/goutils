@@ -15,7 +15,7 @@ func NewConsole(stdout bool) *Console {
 	return &Console{IsStdout: stdout, Level: 1}
 }
 
-func (c *Console) Debug(p string) {
+func (c *Console) Debug(p ...any) {
 	if c.Level > 0 {
 		return
 	}
@@ -28,7 +28,7 @@ func (c *Console) Debug(p string) {
 	}
 }
 
-func (c *Console) Info(p string) {
+func (c *Console) Info(p ...any) {
 	if c.Level > 1 {
 		return
 	}
@@ -41,7 +41,7 @@ func (c *Console) Info(p string) {
 	}
 }
 
-func (c *Console) Warn(p string) {
+func (c *Console) Warn(p ...any) {
 	if c.Level > 2 {
 		return
 	}
@@ -54,7 +54,7 @@ func (c *Console) Warn(p string) {
 	}
 }
 
-func (c *Console) Error(p string) {
+func (c *Console) Error(p ...any) {
 	if c.Level > 3 {
 		return
 	}
@@ -67,7 +67,7 @@ func (c *Console) Error(p string) {
 	}
 }
 
-func (c *Console) Fatal(p string) {
+func (c *Console) Fatal(p ...any) {
 	if c.Level > 4 {
 		return
 	}
@@ -81,7 +81,7 @@ func (c *Console) Fatal(p string) {
 	os.Exit(1)
 }
 
-func (c *Console) Panic(p string) {
+func (c *Console) Panic(p ...any) {
 	if c.Level > 5 {
 		return
 	}

@@ -1,17 +1,16 @@
 package log
 
 import (
-	"io"
 	"os"
 )
 
 type Logger interface {
-	Debug(p string)
-	Info(p string)
-	Warn(p string)
-	Error(p string)
-	Fatal(p string)
-	Panic(p string)
+	Debug(p ...any)
+	Info(p ...any)
+	Warn(p ...any)
+	Error(p ...any)
+	Fatal(p ...any)
+	Panic(p ...any)
 	SetLevel(level int)
 }
 
@@ -20,8 +19,7 @@ func NewFileLogger(path string) Logger {
 	if err != nil {
 		panic(err)
 	}
-	writer := io.Writer(file)
-	return NewFile(&writer)
+	return NewFile(file)
 }
 
 func NewConsoleLogger(stdout bool) Logger {
