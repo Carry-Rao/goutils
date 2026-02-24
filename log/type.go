@@ -7,12 +7,12 @@ import (
 type Level int
 
 type Logger interface {
-	Debug(p ...any)
-	Info(p ...any)
-	Warn(p ...any)
-	Error(p ...any)
-	Fatal(p ...any)
-	Panic(p ...any)
+	Debug(format string, p ...any)
+	Info(format string, p ...any)
+	Warn(format string, p ...any)
+	Error(format string, p ...any)
+	Fatal(format string, p ...any)
+	Panic(format string, p ...any)
 	SetLevel(level Level)
 }
 
