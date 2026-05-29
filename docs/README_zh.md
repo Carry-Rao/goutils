@@ -1,4 +1,4 @@
-We provide [English](https://github.com/Carry-Rao/goutils/tree/main/README.md)
+We provide [English](https://github.com/Carry-Rao/goutils/blob/master/README.md)
 
 # Goutils — 极简易用，无缝切换
 
@@ -28,4 +28,4 @@ We provide [English](https://github.com/Carry-Rao/goutils/tree/main/README.md)
 - 可配置多样化异常处理策略，包含自动降级、异常拦截过滤等能力，提升服务稳定性
 - 全程保持统一调用接口，链路与策略变更不影响上层业务代码
 
-[完整接口文档](https://github.com/Carry-Rao/goutils/tree/main/docs/database_zh.md)
+[完整接口文档](https://github.com/Carry-Rao/goutils/blob/master/docs/database_zh.md)

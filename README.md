@@ -1,4 +1,4 @@
-我们提供[中文](https://github.com/Carry-Rao/goutils/tree/main/docs/README_zh.md)
+我们提供[中文](https://github.com/Carry-Rao/goutils/blob/master/docs/README_zh.md)
 
 # Goutils — Simple to Use, Seamless to Switch
 
@@ -28,4 +28,4 @@ Furthermore, the project has a built-in **Mixture Composite Database** that supp
 - Configurable diverse error handling strategies, including automatic degradation and error interception, to improve service stability
 - Consistent unified calling interfaces throughout, ensuring link and strategy changes do not affect upper-level business code
 
-[Complete API Documentation](https://github.com/Carry-Rao/goutils/tree/main/docs/database_en.md)
+[Complete API Documentation](https://github.com/Carry-Rao/goutils/blob/master/docs/database_en.md)
