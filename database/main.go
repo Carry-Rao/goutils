@@ -32,5 +32,5 @@ func NewDatabase(config map[string]string) (api.Database, error) {
 	case "mixture":
 		return mixture.NewDatabase(config)
 	}
-	return nil, errors.New("Unknown database type.")
+	return nil, errors.New("unknown database type")
 }
