@@ -29,3 +29,15 @@ We provide [English](https://github.com/Carry-Rao/goutils/blob/master/README.md)
 - 全程保持统一调用接口，链路与策略变更不影响上层业务代码
 
 [完整接口文档](https://github.com/Carry-Rao/goutils/blob/master/docs/database_zh.md)
+
+## 日志模块
+
+该模块提供了**统一的日志记录能力**，支持多级别日志、缓冲写入、颜色输出等特性。核心特性包括：
+
+- **多级别日志**：支持 DEBUG、INFO、WARN、ERROR、PANIC 五个日志级别
+- **缓冲写入**：支持缓冲区机制，减少频繁 IO 写入，提升性能
+- **颜色输出**：支持终端颜色输出，便于日志分级查看
+- **自动刷新**：PANIC 与 FATAL 级别日志自动刷新缓冲区并终止程序
+- **级别过滤**：通过设置日志级别，灵活控制日志输出粒度
+
+[完整接口文档](https://github.com/Carry-Rao/goutils/blob/master/docs/log_zh.md)

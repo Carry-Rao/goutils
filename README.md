@@ -29,3 +29,15 @@ Furthermore, the project has a built-in **Mixture Composite Database** that supp
 - Consistent unified calling interfaces throughout, ensuring link and strategy changes do not affect upper-level business code
 
 [Complete API Documentation](https://github.com/Carry-Rao/goutils/blob/master/docs/database_en.md)
+
+## Log Module
+
+This module provides a **unified logging capability**, supporting multi-level logging, buffered writes, and colored output. Its core features include:
+
+- **Multi-level Logging**: Supports DEBUG, INFO, WARN, ERROR, PANIC five log levels
+- **Buffered Write**: Buffer mechanism to reduce frequent I/O and improve performance
+- **Color Output**: Supports terminal color output for easy log level identification
+- **Auto Flush**: PANIC and FATAL level logs automatically flush the buffer and terminate the program
+- **Level Filtering**: Control log output granularity by setting the log level
+
+[Complete API Documentation](https://github.com/Carry-Rao/goutils/blob/master/docs/log_en.md)
