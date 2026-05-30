@@ -27,7 +27,7 @@ package main
 
 import (
     "os"
-    "goutils/log"
+    "github.com/Carry-Rao/goutils/log"
 )
 
 func main() {
