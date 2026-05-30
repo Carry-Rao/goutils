@@ -3,7 +3,7 @@ package log
 import "os"
 
 func (l *Logger) Panic(info string) {
-	if l.LogLevel >= Panic {
+	if l.LogLevel <= Panic {
 		if l.Color {
 			l.addLog(Log{Panic, "\033[41;37m[PANIC]\033[0m" + info + "\n"})
 		} else {
@@ -15,7 +15,7 @@ func (l *Logger) Panic(info string) {
 }
 
 func (l *Logger) Fatal(info string) {
-	if l.LogLevel >= Panic {
+	if l.LogLevel <= Panic {
 		if l.Color {
 			l.addLog(Log{Panic, "\033[41;37m[FATAL]\033[0m" + info + "\n"})
 		} else {
