@@ -6,6 +6,7 @@ type Logger struct {
 	File     *os.File
 	LogLevel LogLevel
 	Buffer   []byte
-	Len      uint
+	Len      uint32
+	Pos      uint32
 	Color    bool
 }

@@ -1,11 +1,17 @@
 package log
 
+import "sync/atomic"
+
 func (l *Logger) addLog(log Log) {
-	l.Buffer = append(l.Buffer, []byte(log.LogInfo)...)
-	if len(l.Buffer) >= int(l.Len) {
-		l.File.Write(l.Buffer)
-		l.Buffer = l.Buffer[:0]
+	pos := atomic.AddUint32(&l.Pos, uint32(len(log.LogInfo)))
+	length := uint32(len(log.LogInfo))
+	end := pos + length
+	if end > l.Len {
+		l.Flush()
+		pos = 0
+		end = length
 	}
+	copy(l.Buffer[pos:end], log.LogInfo)
 }
 
 func (l *Logger) Flush() {
