@@ -30,7 +30,7 @@ table, _ := db.GetTable("users", &User{})
 table.Ins(&User{Name: "Alice", Email: "alice@example.com"}, 0)           // 插入
 result, _ := table.Get(&User{Name: "Alice"}, []string{"Name"}, 0)         // 查询
 table.Set(&User{Name: "Alice", Email: "alice@new.com"}, []string{"Name"}, 0) // 更新
-table.Delete(&User{Name: "Bob"}, []string{"Name"}, 0)                     // 删除
+table.Del(&User{Name: "Bob"}, []string{"Name"}, 0)                     // 删除
 
 // 删除表
 db.DeleteTable("users")
@@ -83,7 +83,7 @@ type User struct {
 | `Ins(example, ttl)` | 插入一条记录，跳过标记为 autoinc 的字段 |
 | `Get(example, whereFields, ttl)` | 条件查询（返回第一条），whereFields 指定条件字段 |
 | `Set(example, whereFields, ttl)` | 按条件更新，whereFields 中的字段不参与更新 |
-| `Delete(example, whereFields, ttl)` | 条件删除 |
+| `Del(example, whereFields, ttl)` | 条件删除 |
 
 **Config 字段属性**：
 
@@ -152,7 +152,7 @@ mix.Add(mysqlDB, mixture.Return)     // 返回错误
 | `Ins` | 所有层级依次执行，某一层失败按策略处理 |
 | `Get` | 从第一层开始查询，查到结果即返回；全部失败则返回最后一个错误 |
 | `Set` | 所有层级依次执行，某一层失败按策略处理 |
-| `Delete` | 所有层级依次执行，某一层失败按策略处理 |
+| `Del` | 所有层级依次执行，某一层失败按策略处理 |
 
 ### 典型场景：多级读写
 

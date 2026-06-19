@@ -30,7 +30,7 @@ table, _ := db.GetTable("users", &User{})
 table.Ins(&User{Name: "Alice", Email: "alice@example.com"}, 0)                // Insert
 result, _ := table.Get(&User{Name: "Alice"}, []string{"Name"}, 0)                // Query
 table.Set(&User{Name: "Alice", Email: "alice@new.com"}, []string{"Name"}, 0)     // Update
-table.Delete(&User{Name: "Bob"}, []string{"Name"}, 0)                            // Delete
+table.Del(&User{Name: "Bob"}, []string{"Name"}, 0)                            // Delete
 
 // Delete the table
 db.DeleteTable("users")
@@ -83,7 +83,7 @@ All `Table` methods accept a `time.Duration` as the last parameter for data expi
 | `Ins(example, ttl)` | Insert a record; fields tagged `autoinc` are skipped |
 | `Get(example, whereFields, ttl)` | Query by conditions (returns the first match) |
 | `Set(example, whereFields, ttl)` | Update by conditions; `whereFields` are not updated |
-| `Delete(example, whereFields, ttl)` | Delete by conditions |
+| `Del(example, whereFields, ttl)` | Delete by conditions |
 
 **Config field properties**:
 
@@ -152,7 +152,7 @@ mix.Add(mysqlDB, mixture.Return)
 | `Ins` | Executes on all layers in order; failures are handled per strategy |
 | `Get` | Queries from the first layer; returns on first hit; returns the last error if all fail |
 | `Set` | Executes on all layers in order; failures are handled per strategy |
-| `Delete` | Executes on all layers in order; failures are handled per strategy |
+| `Del` | Executes on all layers in order; failures are handled per strategy |
 
 ### Typical Scenario: Multi-tier Read/Write
 
