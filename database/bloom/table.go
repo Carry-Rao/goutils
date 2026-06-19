@@ -71,7 +71,7 @@ func (t *Table) Ins(example any, _ time.Duration) error {
 	return nil
 }
 
-func (t *Table) Get(example any, whereFields []string, _ time.Duration) (any, error) {
+func (t *Table) Get(example any, whereFields []string, _ time.Duration) ([]any, error) {
 	if t.cacheKey == "" {
 		return nil, ErrNotFound
 	}
@@ -104,7 +104,7 @@ func (t *Table) Get(example any, whereFields []string, _ time.Duration) (any, er
 		return nil, ErrNotFound
 	}
 
-	return d, nil
+	return []any{d}, nil
 }
 
 func (t *Table) Set(example any, whereFields []string, _ time.Duration) error {

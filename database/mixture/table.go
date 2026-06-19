@@ -26,7 +26,7 @@ func (t *Table) Ins(example any, ttl time.Duration) error {
 	return lastErr
 }
 
-func (t *Table) Get(example any, whereFields []string, ttl time.Duration) (any, error) {
+func (t *Table) Get(example any, whereFields []string, ttl time.Duration) ([]any, error) {
 	var lastErr error
 	for i, tbl := range t.tables {
 		res, err := tbl.Get(example, whereFields, ttl)

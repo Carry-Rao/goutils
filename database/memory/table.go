@@ -44,7 +44,7 @@ func (t *Table) Ins(example any, ttl time.Duration) error {
 	return nil
 }
 
-func (t *Table) Get(example any, whereFields []string, _ time.Duration) (any, error) {
+func (t *Table) Get(example any, whereFields []string, _ time.Duration) ([]any, error) {
 	val := reflect.ValueOf(example)
 	for val.Kind() == reflect.Ptr {
 		val = val.Elem()
@@ -81,7 +81,7 @@ func (t *Table) Get(example any, whereFields []string, _ time.Duration) (any, er
 		return nil, fmt.Errorf("not found")
 	}
 
-	return ent.data, nil
+	return []any{ent.data}, nil
 }
 
 func (t *Table) Set(example any, whereFields []string, ttl time.Duration) error {

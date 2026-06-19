@@ -97,7 +97,7 @@ func (t *Table) Ins(example any, _ time.Duration) error {
 	return err
 }
 
-func (t *Table) Get(example any, whereFields []string, _ time.Duration) (any, error) {
+func (t *Table) Get(example any, whereFields []string, _ time.Duration) ([]any, error) {
 	val := reflect.ValueOf(example)
 	for val.Kind() == reflect.Ptr {
 		val = val.Elem()
@@ -111,11 +111,11 @@ func (t *Table) Get(example any, whereFields []string, _ time.Duration) (any, er
 	if err != nil {
 		return nil, err
 	}
-	if whereClause == "" {
-		return nil, fmt.Errorf("no where conditions specified")
-	}
 
-	query := fmt.Sprintf("SELECT * FROM `%s` WHERE %s LIMIT 1", t.tableName, whereClause)
+	query := fmt.Sprintf("SELECT * FROM `%s` WHERE %s", t.tableName, whereClause)
+	if whereClause == "" {
+		query = fmt.Sprintf("SELECT * FROM `%s`", t.tableName)
+	}
 	rows, err := t.db.Query(query, args...)
 	if err != nil {
 		return nil, err
@@ -127,33 +127,36 @@ func (t *Table) Get(example any, whereFields []string, _ time.Duration) (any, er
 		return nil, err
 	}
 
-	if !rows.Next() {
-		return nil, fmt.Errorf("not found")
-	}
-
 	colIndex := make(map[string]int, len(cols))
 	for i, c := range cols {
 		colIndex[c] = i
 	}
 
-	result := reflect.New(typ).Elem()
-	scanPtrs := make([]any, len(cols))
-	for i := 0; i < typ.NumField(); i++ {
-		f := typ.Field(i)
-		if !f.IsExported() {
-			continue
+	var results []any
+	for rows.Next() {
+		result := reflect.New(typ).Elem()
+		scanPtrs := make([]any, len(cols))
+		for i := 0; i < typ.NumField(); i++ {
+			f := typ.Field(i)
+			if !f.IsExported() {
+				continue
+			}
+			colName := getDBColumnName(f)
+			if idx, ok := colIndex[colName]; ok {
+				scanPtrs[idx] = result.Field(i).Addr().Interface()
+			}
 		}
-		colName := getDBColumnName(f)
-		if idx, ok := colIndex[colName]; ok {
-			scanPtrs[idx] = result.Field(i).Addr().Interface()
+		if err := rows.Scan(scanPtrs...); err != nil {
+			return nil, err
 		}
+		results = append(results, result.Addr().Interface())
 	}
 
-	if err := rows.Scan(scanPtrs...); err != nil {
-		return nil, err
+	if len(results) == 0 {
+		return nil, fmt.Errorf("not found")
 	}
 
-	return result.Addr().Interface(), nil
+	return results, nil
 }
 
 func (t *Table) Set(example any, whereFields []string, _ time.Duration) error {
@@ -169,9 +172,6 @@ func (t *Table) Set(example any, whereFields []string, _ time.Duration) error {
 	whereClause, args, err := buildWhereClause(typ, val, whereFields)
 	if err != nil {
 		return err
-	}
-	if whereClause == "" {
-		return fmt.Errorf("no where conditions specified")
 	}
 
 	whereSet := make(map[string]bool)
@@ -198,7 +198,10 @@ func (t *Table) Set(example any, whereFields []string, _ time.Duration) error {
 		return fmt.Errorf("no fields to set")
 	}
 
-	query := fmt.Sprintf("UPDATE `%s` SET %s WHERE %s", t.tableName, strings.Join(sets, ","), whereClause)
+	query := fmt.Sprintf("UPDATE `%s` SET %s", t.tableName, strings.Join(sets, ","))
+	if whereClause != "" {
+		query = fmt.Sprintf("UPDATE `%s` SET %s WHERE %s", t.tableName, strings.Join(sets, ","), whereClause)
+	}
 	_, err = t.db.Exec(query, args...)
 	return err
 }
@@ -217,11 +220,11 @@ func (t *Table) Del(example any, whereFields []string, _ time.Duration) error {
 	if err != nil {
 		return err
 	}
-	if whereClause == "" {
-		return fmt.Errorf("no where conditions specified")
-	}
 
-	query := fmt.Sprintf("DELETE FROM `%s` WHERE %s", t.tableName, whereClause)
+	query := fmt.Sprintf("DELETE FROM `%s`", t.tableName)
+	if whereClause != "" {
+		query = fmt.Sprintf("DELETE FROM `%s` WHERE %s", t.tableName, whereClause)
+	}
 	_, err = t.db.Exec(query, args...)
 	return err
 }

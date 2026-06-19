@@ -77,7 +77,7 @@ func (t *Table) Ins(example any, ttl time.Duration) error {
 	return t.db.client.HSet(context.Background(), key, data).Err()
 }
 
-func (t *Table) Get(example any, whereFields []string, _ time.Duration) (any, error) {
+func (t *Table) Get(example any, whereFields []string, _ time.Duration) ([]any, error) {
 	if t.cacheKey == "" {
 		return nil, fmt.Errorf("not found")
 	}
@@ -119,7 +119,7 @@ func (t *Table) Get(example any, whereFields []string, _ time.Duration) (any, er
 		}
 	}
 
-	return result.Addr().Interface(), nil
+	return []any{result.Addr().Interface()}, nil
 }
 
 func (t *Table) Set(example any, whereFields []string, ttl time.Duration) error {
