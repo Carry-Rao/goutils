@@ -56,10 +56,10 @@ func (t *Table) Set(example any, whereFields []string, ttl time.Duration) error 
 	return lastErr
 }
 
-func (t *Table) Delete(example any, whereFields []string, ttl time.Duration) error {
+func (t *Table) Del(example any, whereFields []string, ttl time.Duration) error {
 	var lastErr error
 	for i, tbl := range t.tables {
-		err := tbl.Delete(example, whereFields, ttl)
+		err := tbl.Del(example, whereFields, ttl)
 		if err == nil {
 			return nil
 		}

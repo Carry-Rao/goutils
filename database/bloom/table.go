@@ -138,7 +138,7 @@ func (t *Table) Set(example any, whereFields []string, _ time.Duration) error {
 	return nil
 }
 
-func (t *Table) Delete(example any, whereFields []string, _ time.Duration) error {
+func (t *Table) Del(example any, whereFields []string, _ time.Duration) error {
 	if t.cacheKey == "" {
 		return ErrNotFound
 	}

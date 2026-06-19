@@ -216,7 +216,7 @@ func (t *Table) Set(example any, whereFields []string, _ time.Duration) error {
 }
 
 // Delete removes rows matching the whereFields conditions from the example struct.
-func (t *Table) Delete(example any, whereFields []string, _ time.Duration) error {
+func (t *Table) Del(example any, whereFields []string, _ time.Duration) error {
 	val := reflect.ValueOf(example)
 	for val.Kind() == reflect.Ptr {
 		val = val.Elem()

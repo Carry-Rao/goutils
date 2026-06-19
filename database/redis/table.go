@@ -157,7 +157,7 @@ func (t *Table) Set(example any, whereFields []string, ttl time.Duration) error 
 	return t.db.client.HSet(context.Background(), key, data).Err()
 }
 
-func (t *Table) Delete(example any, whereFields []string, _ time.Duration) error {
+func (t *Table) Del(example any, whereFields []string, _ time.Duration) error {
 	if t.cacheKey == "" {
 		return nil
 	}
