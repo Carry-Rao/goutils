@@ -2,8 +2,10 @@ package redis
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
+	"reflect"
+	"strings"
+	"time"
 )
 
 type Table struct {
@@ -12,82 +14,191 @@ type Table struct {
 	cacheKey  string
 }
 
-func (t *Table) Create(data map[string]any) error {
-	if t.cacheKey == "" {
-		return nil
+// getDBColumnName extracts the column name from a struct field's `db` tag.
+func getDBColumnName(f reflect.StructField) string {
+	tag := f.Tag.Get("db")
+	if tag == "" {
+		return f.Name
 	}
-
-	idVal, ok := data[t.cacheKey]
-	if !ok {
-		return nil
+	parts := strings.Split(tag, ",")
+	if parts[0] != "" {
+		return parts[0]
 	}
-
-	key := fmt.Sprintf("%s_%v", t.tableName, idVal)
-	val, err := json.Marshal(data)
-	if err != nil {
-		return err
-	}
-
-	return t.db.client.Set(context.Background(), key, val, 0).Err()
+	return f.Name
 }
 
-func (t *Table) Get(where map[string]any) ([]any, error) {
+// findFieldByDBTag finds a struct field matching the given name.
+func findFieldByDBTag(typ reflect.Type, name string) (reflect.StructField, bool) {
+	for i := 0; i < typ.NumField(); i++ {
+		f := typ.Field(i)
+		if !f.IsExported() {
+			continue
+		}
+		colName := getDBColumnName(f)
+		if colName == name || f.Name == name {
+			return f, true
+		}
+	}
+	return reflect.StructField{}, false
+}
+
+func (t *Table) Ins(example any, ttl time.Duration) error {
 	if t.cacheKey == "" {
-		return nil, nil
+		return nil
 	}
 
-	idVal, ok := where[t.cacheKey]
-	if !ok {
-		return nil, nil
+	val := reflect.ValueOf(example)
+	for val.Kind() == reflect.Ptr {
+		val = val.Elem()
 	}
+	if val.Kind() != reflect.Struct {
+		return fmt.Errorf("example must be struct or pointer to struct")
+	}
+	typ := val.Type()
 
+	f, found := findFieldByDBTag(typ, t.cacheKey)
+	if !found {
+		return nil
+	}
+	idVal := val.FieldByIndex(f.Index).Interface()
 	key := fmt.Sprintf("%s_%v", t.tableName, idVal)
-	data, err := t.db.client.Get(context.Background(), key).Bytes()
+
+	// Build a map to marshal
+	data := make(map[string]any)
+	for i := 0; i < typ.NumField(); i++ {
+		field := typ.Field(i)
+		if !field.IsExported() {
+			continue
+		}
+		colName := getDBColumnName(field)
+		data[colName] = val.Field(i).Interface()
+	}
+
+	return t.db.client.HSet(context.Background(), key, data).Err()
+}
+
+func (t *Table) Get(example any, whereFields []string, _ time.Duration) (any, error) {
+	if t.cacheKey == "" {
+		return nil, fmt.Errorf("not found")
+	}
+
+	val := reflect.ValueOf(example)
+	for val.Kind() == reflect.Ptr {
+		val = val.Elem()
+	}
+	if val.Kind() != reflect.Struct {
+		return nil, fmt.Errorf("example must be struct or pointer to struct")
+	}
+	typ := val.Type()
+
+	f, found := findFieldByDBTag(typ, t.cacheKey)
+	if !found {
+		return nil, fmt.Errorf("not found")
+	}
+	idVal := val.FieldByIndex(f.Index).Interface()
+	key := fmt.Sprintf("%s_%v", t.tableName, idVal)
+
+	result := reflect.New(typ).Elem()
+
+	data, err := t.db.client.HGetAll(context.Background(), key).Result()
 	if err != nil {
 		return nil, err
 	}
-
-	var m map[string]any
-	if err := json.Unmarshal(data, &m); err != nil {
-		return nil, err
+	if len(data) == 0 {
+		return nil, fmt.Errorf("not found")
 	}
 
-	res := make([]any, 0, len(m))
-	for _, v := range m {
-		res = append(res, v)
+	for i := 0; i < typ.NumField(); i++ {
+		field := typ.Field(i)
+		if !field.IsExported() {
+			continue
+		}
+		colName := getDBColumnName(field)
+		if strVal, ok := data[colName]; ok {
+			setFieldFromString(result.Field(i), strVal)
+		}
 	}
-	return res, nil
+
+	return result.Addr().Interface(), nil
 }
 
-func (t *Table) Set(data map[string]any) error {
+func (t *Table) Set(example any, whereFields []string, ttl time.Duration) error {
 	if t.cacheKey == "" {
 		return nil
 	}
 
-	idVal, ok := data[t.cacheKey]
-	if !ok {
+	val := reflect.ValueOf(example)
+	for val.Kind() == reflect.Ptr {
+		val = val.Elem()
+	}
+	if val.Kind() != reflect.Struct {
+		return fmt.Errorf("example must be struct or pointer to struct")
+	}
+	typ := val.Type()
+
+	f, found := findFieldByDBTag(typ, t.cacheKey)
+	if !found {
 		return fmt.Errorf("missing cache key")
 	}
-
+	idVal := val.FieldByIndex(f.Index).Interface()
 	key := fmt.Sprintf("%s_%v", t.tableName, idVal)
-	val, err := json.Marshal(data)
-	if err != nil {
-		return err
+
+	// Build a map and use HSet
+	data := make(map[string]any)
+	for i := 0; i < typ.NumField(); i++ {
+		field := typ.Field(i)
+		if !field.IsExported() {
+			continue
+		}
+		colName := getDBColumnName(field)
+		data[colName] = val.Field(i).Interface()
 	}
 
-	return t.db.client.Set(context.Background(), key, val, 0).Err()
+	return t.db.client.HSet(context.Background(), key, data).Err()
 }
 
-func (t *Table) Delete(where map[string]any) error {
+func (t *Table) Delete(example any, whereFields []string, _ time.Duration) error {
 	if t.cacheKey == "" {
 		return nil
 	}
 
-	idVal, ok := where[t.cacheKey]
-	if !ok {
+	val := reflect.ValueOf(example)
+	for val.Kind() == reflect.Ptr {
+		val = val.Elem()
+	}
+	if val.Kind() != reflect.Struct {
+		return fmt.Errorf("example must be struct or pointer to struct")
+	}
+	typ := val.Type()
+
+	f, found := findFieldByDBTag(typ, t.cacheKey)
+	if !found {
 		return nil
 	}
-
+	idVal := val.FieldByIndex(f.Index).Interface()
 	key := fmt.Sprintf("%s_%v", t.tableName, idVal)
+
 	return t.db.client.Del(context.Background(), key).Err()
+}
+
+// setFieldFromString sets a reflect.Value from a string (Redis stores hashes as strings).
+func setFieldFromString(fv reflect.Value, str string) {
+	switch fv.Kind() {
+	case reflect.String:
+		fv.SetString(str)
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+		var v int64
+		fmt.Sscanf(str, "%d", &v)
+		fv.SetInt(v)
+	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
+		var v uint64
+		fmt.Sscanf(str, "%d", &v)
+		fv.SetUint(v)
+	case reflect.Float32, reflect.Float64:
+		var v float64
+		fmt.Sscanf(str, "%f", &v)
+		fv.SetFloat(v)
+	case reflect.Bool:
+		fv.SetBool(str == "1" || str == "true")
+	}
 }

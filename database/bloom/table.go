@@ -3,6 +3,9 @@ package bloom
 import (
 	"fmt"
 	"hash/fnv"
+	"reflect"
+	"strings"
+	"time"
 )
 
 type Table struct {
@@ -11,36 +14,84 @@ type Table struct {
 	cacheKey  string
 }
 
-func (t *Table) Create(data map[string]any) error {
+// getDBColumnName extracts the column name from a struct field's `db` tag.
+func getDBColumnName(f reflect.StructField) string {
+	tag := f.Tag.Get("db")
+	if tag == "" {
+		return f.Name
+	}
+	parts := strings.Split(tag, ",")
+	if parts[0] != "" {
+		return parts[0]
+	}
+	return f.Name
+}
+
+// findFieldByDBTag finds a struct field matching the given name.
+func findFieldByDBTag(typ reflect.Type, name string) (reflect.StructField, bool) {
+	for i := 0; i < typ.NumField(); i++ {
+		f := typ.Field(i)
+		if !f.IsExported() {
+			continue
+		}
+		colName := getDBColumnName(f)
+		if colName == name || f.Name == name {
+			return f, true
+		}
+	}
+	return reflect.StructField{}, false
+}
+
+func (t *Table) Ins(example any, _ time.Duration) error {
 	if t.cacheKey == "" {
 		return ErrNotFound
 	}
 
-	idVal, ok := data[t.cacheKey]
-	if !ok {
+	val := reflect.ValueOf(example)
+	for val.Kind() == reflect.Ptr {
+		val = val.Elem()
+	}
+	if val.Kind() != reflect.Struct {
+		return fmt.Errorf("example must be struct or pointer to struct")
+	}
+	typ := val.Type()
+
+	f, found := findFieldByDBTag(typ, t.cacheKey)
+	if !found {
 		return ErrNotFound
 	}
-
+	idVal := val.FieldByIndex(f.Index).Interface()
 	key := fmt.Sprintf("%s_%v", t.tableName, idVal)
+
 	t.add(key)
 
 	t.db.mu.Lock()
 	defer t.db.mu.Unlock()
-	t.db.data[t.tableName][key] = data
+	t.db.data[t.tableName][key] = example
 	return nil
 }
 
-func (t *Table) Get(where map[string]any) ([]any, error) {
+func (t *Table) Get(example any, whereFields []string, _ time.Duration) (any, error) {
 	if t.cacheKey == "" {
 		return nil, ErrNotFound
 	}
 
-	idVal, ok := where[t.cacheKey]
-	if !ok {
+	val := reflect.ValueOf(example)
+	for val.Kind() == reflect.Ptr {
+		val = val.Elem()
+	}
+	if val.Kind() != reflect.Struct {
+		return nil, fmt.Errorf("example must be struct or pointer to struct")
+	}
+	typ := val.Type()
+
+	f, found := findFieldByDBTag(typ, t.cacheKey)
+	if !found {
 		return nil, ErrNotFound
 	}
-
+	idVal := val.FieldByIndex(f.Index).Interface()
 	key := fmt.Sprintf("%s_%v", t.tableName, idVal)
+
 	if !t.contains(key) {
 		return nil, ErrNotFound
 	}
@@ -48,55 +99,66 @@ func (t *Table) Get(where map[string]any) ([]any, error) {
 	t.db.mu.RLock()
 	defer t.db.mu.RUnlock()
 
-	val, ok := t.db.data[t.tableName][key]
+	d, ok := t.db.data[t.tableName][key]
 	if !ok {
 		return nil, ErrNotFound
 	}
 
-	m, ok := val.(map[string]any)
-	if !ok {
-		return nil, ErrNotFound
-	}
-
-	res := make([]any, 0, len(m))
-	for _, v := range m {
-		res = append(res, v)
-	}
-	return res, nil
+	return d, nil
 }
 
-func (t *Table) Set(data map[string]any) error {
+func (t *Table) Set(example any, whereFields []string, _ time.Duration) error {
 	if t.cacheKey == "" {
 		return ErrNotFound
 	}
 
-	idVal, ok := data[t.cacheKey]
-	if !ok {
+	val := reflect.ValueOf(example)
+	for val.Kind() == reflect.Ptr {
+		val = val.Elem()
+	}
+	if val.Kind() != reflect.Struct {
+		return fmt.Errorf("example must be struct or pointer to struct")
+	}
+	typ := val.Type()
+
+	f, found := findFieldByDBTag(typ, t.cacheKey)
+	if !found {
 		return ErrNotFound
 	}
-
+	idVal := val.FieldByIndex(f.Index).Interface()
 	key := fmt.Sprintf("%s_%v", t.tableName, idVal)
+
 	if !t.contains(key) {
 		return ErrNotFound
 	}
 
 	t.db.mu.Lock()
 	defer t.db.mu.Unlock()
-	t.db.data[t.tableName][key] = data
+	t.db.data[t.tableName][key] = example
 	return nil
 }
 
-func (t *Table) Delete(where map[string]any) error {
+func (t *Table) Delete(example any, whereFields []string, _ time.Duration) error {
 	if t.cacheKey == "" {
 		return ErrNotFound
 	}
 
-	idVal, ok := where[t.cacheKey]
-	if !ok {
+	val := reflect.ValueOf(example)
+	for val.Kind() == reflect.Ptr {
+		val = val.Elem()
+	}
+	if val.Kind() != reflect.Struct {
+		return fmt.Errorf("example must be struct or pointer to struct")
+	}
+	typ := val.Type()
+
+	f, found := findFieldByDBTag(typ, t.cacheKey)
+	if !found {
 		return ErrNotFound
 	}
-
+	idVal := val.FieldByIndex(f.Index).Interface()
 	key := fmt.Sprintf("%s_%v", t.tableName, idVal)
+
 	if !t.contains(key) {
 		return ErrNotFound
 	}

@@ -1,9 +1,9 @@
 package api
 
 type Database interface {
-	Create(tableName string, config map[string]Config) error
-	GetTable(tableName string) (Table, error)
-	DeleteTable(tableName string) error
+	Create(string, map[string]Config) error
+	GetTable(string, any) (Table, error)
+	DeleteTable(string) error
 }
 
 type Config struct {

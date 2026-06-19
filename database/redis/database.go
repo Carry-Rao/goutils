@@ -23,7 +23,7 @@ func (r *Database) Create(tableName string, config map[string]api.Config) error 
 	return nil
 }
 
-func (r *Database) GetTable(tableName string) (api.Table, error) {
+func (r *Database) GetTable(tableName string, _ any) (api.Table, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 

@@ -36,12 +36,12 @@ func (m *Database) Create(tableName string, config map[string]api.Config) error 
 	return nil
 }
 
-func (m *Database) GetTable(tableName string) (api.Table, error) {
+func (m *Database) GetTable(tableName string, example any) (api.Table, error) {
 	var tables []api.Table
 	var acts []ErrAction
 
 	for i, db := range m.dbs {
-		tbl, err := db.GetTable(tableName)
+		tbl, err := db.GetTable(tableName, example)
 		if err != nil {
 			if m.errActs[i] == Return {
 				return nil, err

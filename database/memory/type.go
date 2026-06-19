@@ -2,7 +2,13 @@ package memory
 
 import (
 	"sync"
+	"time"
 )
+
+type entry struct {
+	data    any
+	expires time.Time
+}
 
 type Database struct {
 	data  map[string]map[string]any

@@ -1,8 +1,10 @@
 package api
 
+import "time"
+
 type Table interface {
-	Create(map[string]any) error
-	Get(map[string]any) ([]any, error)
-	Set(map[string]any) error
-	Delete(map[string]any) error
+	Ins(any, time.Duration) error
+	Get(any, []string, time.Duration) (any, error)
+	Set(any, []string, time.Duration) error
+	Delete(any, []string, time.Duration) error
 }

@@ -30,7 +30,7 @@ func (b *Database) Create(tableName string, config map[string]api.Config) error 
 	return nil
 }
 
-func (b *Database) GetTable(tableName string) (api.Table, error) {
+func (b *Database) GetTable(tableName string, _ any) (api.Table, error) {
 	b.mu.RLock()
 	defer b.mu.RUnlock()
 

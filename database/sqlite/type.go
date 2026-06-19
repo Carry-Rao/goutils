@@ -25,3 +25,9 @@ func NewDatabase(cfg map[string]string) (*Database, error) {
 func (s *Database) Close() error {
 	return s.db.Close()
 }
+
+// Exec executes a raw SQL query (useful for inserts and other operations not covered by the Table interface).
+func (s *Database) Exec(query string, args ...any) error {
+	_, err := s.db.Exec(query, args...)
+	return err
+}

@@ -2,6 +2,7 @@ package mysql
 
 import (
 	"fmt"
+	"reflect"
 	"strings"
 
 	"github.com/Carry-Rao/goutils/database/api"
@@ -37,7 +38,7 @@ func (m *Database) Create(tableName string, config map[string]api.Config) error 
 	return err
 }
 
-func (m *Database) GetTable(tableName string) (api.Table, error) {
+func (m *Database) GetTable(tableName string, example any) (api.Table, error) {
 	var exists bool
 	err := m.db.QueryRow("SELECT COUNT(*) FROM information_schema.tables WHERE table_schema=DATABASE() AND table_name=?", tableName).Scan(&exists)
 	if err != nil {
@@ -46,7 +47,7 @@ func (m *Database) GetTable(tableName string) (api.Table, error) {
 	if !exists {
 		return nil, fmt.Errorf("table not exists")
 	}
-	return &Table{db: m.db, tableName: tableName}, nil
+	return &Table{db: m.db, tableName: tableName, typ: reflect.TypeOf(example)}, nil
 }
 
 func (m *Database) DeleteTable(tableName string) error {

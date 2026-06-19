@@ -3,6 +3,7 @@ package postgresql
 import (
 	"context"
 	"fmt"
+	"reflect"
 	"strings"
 
 	"github.com/Carry-Rao/goutils/database/api"
@@ -46,7 +47,7 @@ func (p *Database) Create(tableName string, config map[string]api.Config) error 
 	return nil
 }
 
-func (p *Database) GetTable(tableName string) (api.Table, error) {
+func (p *Database) GetTable(tableName string, example any) (api.Table, error) {
 	var exists bool
 	err := p.pool.QueryRow(
 		context.Background(),
@@ -59,7 +60,7 @@ func (p *Database) GetTable(tableName string) (api.Table, error) {
 	if !exists {
 		return nil, fmt.Errorf("table %s not exists", tableName)
 	}
-	return &Table{pool: p.pool, table: tableName}, nil
+	return &Table{pool: p.pool, table: tableName, typ: reflect.TypeOf(example)}, nil
 }
 
 func (p *Database) DeleteTable(tableName string) error {

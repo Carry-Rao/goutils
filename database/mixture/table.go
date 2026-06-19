@@ -1,29 +1,35 @@
 package mixture
 
-import "github.com/Carry-Rao/goutils/database/api"
+import (
+	"time"
+
+	"github.com/Carry-Rao/goutils/database/api"
+)
 
 type Table struct {
 	tables []api.Table
 	acts   []ErrAction
 }
 
-func (t *Table) Create(data map[string]any) error {
+func (t *Table) Ins(example any, ttl time.Duration) error {
+	var lastErr error
 	for i, tbl := range t.tables {
-		err := tbl.Create(data)
+		err := tbl.Ins(example, ttl)
 		if err == nil {
-			continue
+			return nil
 		}
+		lastErr = err
 		if t.acts[i] == Return {
 			return err
 		}
 	}
-	return nil
+	return lastErr
 }
 
-func (t *Table) Get(where map[string]any) ([]any, error) {
+func (t *Table) Get(example any, whereFields []string, ttl time.Duration) (any, error) {
 	var lastErr error
 	for i, tbl := range t.tables {
-		res, err := tbl.Get(where)
+		res, err := tbl.Get(example, whereFields, ttl)
 		if err == nil {
 			return res, nil
 		}
@@ -35,28 +41,32 @@ func (t *Table) Get(where map[string]any) ([]any, error) {
 	return nil, lastErr
 }
 
-func (t *Table) Set(data map[string]any) error {
+func (t *Table) Set(example any, whereFields []string, ttl time.Duration) error {
+	var lastErr error
 	for i, tbl := range t.tables {
-		err := tbl.Set(data)
+		err := tbl.Set(example, whereFields, ttl)
 		if err == nil {
-			continue
+			return nil
 		}
+		lastErr = err
 		if t.acts[i] == Return {
 			return err
 		}
 	}
-	return nil
+	return lastErr
 }
 
-func (t *Table) Delete(where map[string]any) error {
+func (t *Table) Delete(example any, whereFields []string, ttl time.Duration) error {
+	var lastErr error
 	for i, tbl := range t.tables {
-		err := tbl.Delete(where)
+		err := tbl.Delete(example, whereFields, ttl)
 		if err == nil {
-			continue
+			return nil
 		}
+		lastErr = err
 		if t.acts[i] == Return {
 			return err
 		}
 	}
-	return nil
+	return lastErr
 }
