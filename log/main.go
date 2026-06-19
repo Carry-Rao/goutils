@@ -8,7 +8,7 @@ import (
 
 const (
 	timeFmt   = "2006-01-02 15:04:05"
-	nlLen     = 1
+	nlLen     = 0
 	ansiGray  = "\033[90m"
 	ansiReset = "\033[0m"
 	space     = " "
@@ -68,7 +68,6 @@ func (l *Logger) addLog(log Log) {
 		off += uint32(len(space))
 		copy(l.Buffer[off:], logB)
 		off += uint32(len(logB))
-		l.Buffer[off] = '\n'
 		break
 	}
 }
