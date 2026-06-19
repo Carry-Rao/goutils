@@ -23,18 +23,48 @@ db.Create("users", map[string]api.Config{
     "name": {Type: "VARCHAR(255)", NullAble: false},
 })
 
-// Get a table handler
-table, _ := db.GetTable("users")
+// Get a table handler (pass a struct example for reflection)
+table, _ := db.GetTable("users", &User{})
 
-// CRUD operations
-table.Create(map[string]any{"id": 1, "name": "Alice"})
-result, _ := table.Get(map[string]any{"id": 1})
-table.Set(map[string]any{"id": 1, "name": "Bob"})
-table.Delete(map[string]any{"id": 1})
+// CRUD operations (using struct and field name lists)
+table.Ins(&User{Name: "Alice", Email: "alice@example.com"}, 0)                // Insert
+result, _ := table.Get(&User{Name: "Alice"}, []string{"Name"}, 0)                // Query
+table.Set(&User{Name: "Alice", Email: "alice@new.com"}, []string{"Name"}, 0)     // Update
+table.Delete(&User{Name: "Bob"}, []string{"Name"}, 0)                            // Delete
 
 // Delete the table
 db.DeleteTable("users")
 ```
+
+## Core Concepts
+
+The database module uses a **struct-driven** design pattern:
+
+- Each database table maps to a Go struct with `db` tags for field names and constraints
+- `Insert`/`Get`/`Set`/`Delete` all take struct instances as parameters
+- Use field name lists to specify WHERE conditions, avoiding raw SQL
+
+### Struct Definition Example
+
+```go
+type User struct {
+    ID    int    `db:"id,primary,autoinc"`   // Auto-increment primary key
+    Name  string `db:"name"`                 // Regular field
+    Email string `db:"email"`
+    Age   int    `db:"age"`
+}
+```
+
+### TTL (Time To Live)
+
+All `Table` methods accept a `time.Duration` as the last parameter for data expiration:
+
+- **Relational databases** (sqlite / mysql / postgresql): TTL is ignored, data never expires
+- **Memory database** (memory): expired entries are automatically cleaned up
+- **Redis**: TTL works with `EXPIRE` command
+- `0` means no expiration
+
+---
 
 ## Interface Definition
 
@@ -43,17 +73,17 @@ db.DeleteTable("users")
 | Method | Description |
 |--------|-------------|
 | `Create(tableName, config)` | Create a table; config maps field names to field properties |
-| `GetTable(tableName)` | Get a table handler |
+| `GetTable(tableName, example)` | Get a table handler; example is used for struct reflection |
 | `DeleteTable(tableName)` | Drop a table |
 
 **Table interface** (table-level CRUD):
 
 | Method | Description |
 |--------|-------------|
-| `Create(data)` | Insert data |
-| `Get(where)` | Query by conditions (returns the first match) |
-| `Set(data)` | Update data (must include an `id` field) |
-| `Delete(where)` | Delete by conditions |
+| `Ins(example, ttl)` | Insert a record; fields tagged `autoinc` are skipped |
+| `Get(example, whereFields, ttl)` | Query by conditions (returns the first match) |
+| `Set(example, whereFields, ttl)` | Update by conditions; `whereFields` are not updated |
+| `Delete(example, whereFields, ttl)` | Delete by conditions |
 
 **Config field properties**:
 
@@ -82,7 +112,7 @@ db.DeleteTable("users")
 | Type | Config keys | Description |
 |------|-------------|-------------|
 | `redis` | `addr`, `password` | Redis address and password (simulated table structure) |
-| `memory` | none required | In-memory storage, process-level cache |
+| `memory` | none required | In-memory storage with TTL auto-expiration |
 | `bloom` | none required | Bloom filter for fast existence checks |
 
 > Cache-based simulated databases wrap cache components into the standard Database/Table interface. When calling `Create`, you must specify a `PrimaryKey` field in Config as the data identifier.
@@ -119,7 +149,7 @@ mix.Add(mysqlDB, mixture.Return)
 
 | Method | Behavior |
 |--------|----------|
-| `Create` | Executes on all layers in order; failures are handled per strategy |
+| `Ins` | Executes on all layers in order; failures are handled per strategy |
 | `Get` | Queries from the first layer; returns on first hit; returns the last error if all fail |
 | `Set` | Executes on all layers in order; failures are handled per strategy |
 | `Delete` | Executes on all layers in order; failures are handled per strategy |
@@ -134,5 +164,5 @@ mix.Add(redisDB, mixture.Continue)
 mix.Add(mysqlDB, mixture.Return)
 
 // Upper business code is unaware of the link structure — the interface is identical
-table, _ := mix.GetTable("users")
-table.Create(map[string]any{"id": 1, "name": "Alice"})
+table, _ := mix.GetTable("users", &User{})
+table.Ins(&User{Name: "Alice"}, 0)
