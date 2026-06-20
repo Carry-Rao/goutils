@@ -9,6 +9,8 @@ This project is designed to reduce development adaptation costs and unify coding
 - Provide standardized and unified calling interfaces to unify coding styles
 - Encapsulate frequently used and repetitive functions to eliminate redundant code
 
++ **However**, my programming proficiency is insufficient, and almost none of the modules have undergone testing. Deployment in production environments is discouraged.
+
 ## Database Module
 This module features **low intrusion and seamless switching**. Developers can flexibly adapt to various mainstream databases without modifying business code. It natively supports the following databases:
 
