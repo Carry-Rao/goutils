@@ -136,6 +136,11 @@ func (t *Table) Get(example any, whereFields []string, _ time.Duration) ([]any, 
 	for rows.Next() {
 		result := reflect.New(typ).Elem()
 		scanPtrs := make([]any, len(cols))
+		tmpBuf := make([]*interface{}, len(cols))
+		for i := range tmpBuf {
+			tmpBuf[i] = new(interface{})
+			scanPtrs[i] = tmpBuf[i]
+		}
 		for i := 0; i < typ.NumField(); i++ {
 			f := typ.Field(i)
 			if !f.IsExported() {
@@ -154,7 +159,6 @@ func (t *Table) Get(example any, whereFields []string, _ time.Duration) ([]any, 
 
 	return results, nil
 }
-
 func (t *Table) Set(example any, whereFields []string, _ time.Duration) error {
 	val := reflect.ValueOf(example)
 	for val.Kind() == reflect.Ptr {

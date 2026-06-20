@@ -133,6 +133,12 @@ func (t *Table) Get(example any, whereFields []string, _ time.Duration) ([]any, 
 	for rows.Next() {
 		result := reflect.New(typ).Elem()
 		scanPtrs := make([]any, len(cols))
+		tmp := make([]*interface{}, len(cols))
+		for i := range tmp {
+			tmp[i] = new(interface{})
+			scanPtrs[i] = tmp[i]
+		}
+
 		for i := 0; i < typ.NumField(); i++ {
 			f := typ.Field(i)
 			if !f.IsExported() {
