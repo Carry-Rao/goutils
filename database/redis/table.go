@@ -105,7 +105,7 @@ func (t *Table) Get(example any, whereFields []string, _ time.Duration) ([]any, 
 		return nil, err
 	}
 	if len(data) == 0 {
-		return nil, fmt.Errorf("not found")
+		return nil, nil
 	}
 
 	for i := 0; i < typ.NumField(); i++ {

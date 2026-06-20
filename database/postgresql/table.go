@@ -16,7 +16,6 @@ type Table struct {
 	typ   reflect.Type
 }
 
-// getDBColumnName extracts the column name from a struct field's `db` tag.
 func getDBColumnName(f reflect.StructField) string {
 	tag := f.Tag.Get("db")
 	if tag == "" {
@@ -29,7 +28,6 @@ func getDBColumnName(f reflect.StructField) string {
 	return f.Name
 }
 
-// findFieldByDBTag finds a struct field matching the given name.
 func findFieldByDBTag(typ reflect.Type, name string) (reflect.StructField, bool) {
 	for i := 0; i < typ.NumField(); i++ {
 		f := typ.Field(i)
@@ -44,7 +42,6 @@ func findFieldByDBTag(typ reflect.Type, name string) (reflect.StructField, bool)
 	return reflect.StructField{}, false
 }
 
-// buildWhereClause builds a WHERE clause with $1, $2, ... placeholders.
 func buildWhereClause(typ reflect.Type, val reflect.Value, whereFields []string) (string, []any, error) {
 	var conds []string
 	var args []any
@@ -130,7 +127,7 @@ func (t *Table) Get(example any, whereFields []string, _ time.Duration) ([]any, 
 
 	cols := rows.FieldDescriptions()
 	if len(cols) == 0 {
-		return nil, fmt.Errorf("not found")
+		return nil, nil
 	}
 
 	colIndex := make(map[string]int, len(cols))
@@ -159,10 +156,6 @@ func (t *Table) Get(example any, whereFields []string, _ time.Duration) ([]any, 
 			}
 		}
 		results = append(results, result.Addr().Interface())
-	}
-
-	if len(results) == 0 {
-		return nil, fmt.Errorf("not found")
 	}
 
 	return results, nil

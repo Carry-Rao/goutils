@@ -66,7 +66,7 @@ func (t *Table) Get(example any, whereFields []string, _ time.Duration) ([]any, 
 
 	raw, ok := t.db.data[t.tableName][key]
 	if !ok {
-		return nil, fmt.Errorf("not found")
+		return nil, nil
 	}
 
 	ent, ok := raw.(*entry)
@@ -74,11 +74,9 @@ func (t *Table) Get(example any, whereFields []string, _ time.Duration) ([]any, 
 		return nil, fmt.Errorf("invalid entry type")
 	}
 
-	// Check expiry
 	if !ent.expires.IsZero() && time.Now().After(ent.expires) {
-		// Remove expired entry
 		delete(t.db.data[t.tableName], key)
-		return nil, fmt.Errorf("not found")
+		return nil, nil
 	}
 
 	return []any{ent.data}, nil

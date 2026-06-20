@@ -152,10 +152,6 @@ func (t *Table) Get(example any, whereFields []string, _ time.Duration) ([]any, 
 		results = append(results, result.Addr().Interface())
 	}
 
-	if len(results) == 0 {
-		return nil, fmt.Errorf("not found")
-	}
-
 	return results, nil
 }
 
