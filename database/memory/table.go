@@ -3,9 +3,10 @@ package memory
 import (
 	"fmt"
 	"reflect"
-	"strings"
 	"sync"
 	"time"
+
+	"github.com/Carry-Rao/goutils/database/helpers"
 )
 
 type Table struct {
@@ -16,18 +17,14 @@ type Table struct {
 }
 
 func (t *Table) Ins(example any, ttl time.Duration) error {
-	val := reflect.ValueOf(example)
-	for val.Kind() == reflect.Ptr {
-		val = val.Elem()
-	}
+	val := helpers.UnwrapValue(reflect.ValueOf(example))
 	if val.Kind() != reflect.Struct {
 		return fmt.Errorf("example must be struct or pointer to struct")
 	}
 	typ := val.Type()
 
-	// Find primary key field
-	pkField := findFieldByDBTag(typ, t.cacheKey)
-	if pkField.Index == nil {
+	pkField, found := helpers.FindFieldByDBTag(typ, t.cacheKey)
+	if !found {
 		return fmt.Errorf("primary key field %q not found", t.cacheKey)
 	}
 	idVal := val.FieldByIndex(pkField.Index).Interface()
@@ -45,17 +42,14 @@ func (t *Table) Ins(example any, ttl time.Duration) error {
 }
 
 func (t *Table) Get(example any, whereFields []string, _ time.Duration) ([]any, error) {
-	val := reflect.ValueOf(example)
-	for val.Kind() == reflect.Ptr {
-		val = val.Elem()
-	}
+	val := helpers.UnwrapValue(reflect.ValueOf(example))
 	if val.Kind() != reflect.Struct {
 		return nil, fmt.Errorf("example must be struct or pointer to struct")
 	}
+	typ := val.Type()
 
-	// Build key from whereFields cacheKey
-	pkField := findFieldByDBTag(val.Type(), t.cacheKey)
-	if pkField.Index == nil {
+	pkField, found := helpers.FindFieldByDBTag(typ, t.cacheKey)
+	if !found {
 		return nil, fmt.Errorf("primary key field %q not found", t.cacheKey)
 	}
 	idVal := val.FieldByIndex(pkField.Index).Interface()
@@ -83,18 +77,14 @@ func (t *Table) Get(example any, whereFields []string, _ time.Duration) ([]any, 
 }
 
 func (t *Table) Set(example any, whereFields []string, ttl time.Duration) error {
-	val := reflect.ValueOf(example)
-	for val.Kind() == reflect.Ptr {
-		val = val.Elem()
-	}
+	val := helpers.UnwrapValue(reflect.ValueOf(example))
 	if val.Kind() != reflect.Struct {
 		return fmt.Errorf("example must be struct or pointer to struct")
 	}
 	typ := val.Type()
 
-	// Build key from whereFields cacheKey
-	pkField := findFieldByDBTag(typ, t.cacheKey)
-	if pkField.Index == nil {
+	pkField, found := helpers.FindFieldByDBTag(typ, t.cacheKey)
+	if !found {
 		return fmt.Errorf("primary key field %q not found", t.cacheKey)
 	}
 	idVal := val.FieldByIndex(pkField.Index).Interface()
@@ -112,17 +102,14 @@ func (t *Table) Set(example any, whereFields []string, ttl time.Duration) error 
 }
 
 func (t *Table) Del(example any, whereFields []string, _ time.Duration) error {
-	val := reflect.ValueOf(example)
-	for val.Kind() == reflect.Ptr {
-		val = val.Elem()
-	}
+	val := helpers.UnwrapValue(reflect.ValueOf(example))
 	if val.Kind() != reflect.Struct {
 		return fmt.Errorf("example must be struct or pointer to struct")
 	}
+	typ := val.Type()
 
-	// Build key from whereFields cacheKey
-	pkField := findFieldByDBTag(val.Type(), t.cacheKey)
-	if pkField.Index == nil {
+	pkField, found := helpers.FindFieldByDBTag(typ, t.cacheKey)
+	if !found {
 		return fmt.Errorf("primary key field %q not found", t.cacheKey)
 	}
 	idVal := val.FieldByIndex(pkField.Index).Interface()
@@ -132,32 +119,4 @@ func (t *Table) Del(example any, whereFields []string, _ time.Duration) error {
 	defer t.mu.Unlock()
 	delete(t.db.data[t.tableName], key)
 	return nil
-}
-
-// findFieldByDBTag finds a struct field matching the given name.
-func findFieldByDBTag(typ reflect.Type, name string) reflect.StructField {
-	for i := 0; i < typ.NumField(); i++ {
-		f := typ.Field(i)
-		if !f.IsExported() {
-			continue
-		}
-		colName := getDBColumnName(f)
-		if colName == name || f.Name == name {
-			return f
-		}
-	}
-	return reflect.StructField{}
-}
-
-// getDBColumnName extracts the column name from a struct field's `db` tag.
-func getDBColumnName(f reflect.StructField) string {
-	tag := f.Tag.Get("db")
-	if tag == "" {
-		return f.Name
-	}
-	parts := strings.Split(tag, ",")
-	if parts[0] != "" {
-		return parts[0]
-	}
-	return f.Name
 }
