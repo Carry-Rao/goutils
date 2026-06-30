@@ -4,8 +4,9 @@ import (
 	"fmt"
 	"hash/fnv"
 	"reflect"
-	"strings"
 	"time"
+
+	"github.com/Carry-Rao/goutils/database/helpers"
 )
 
 type Table struct {
@@ -14,49 +15,18 @@ type Table struct {
 	cacheKey  string
 }
 
-// getDBColumnName extracts the column name from a struct field's `db` tag.
-func getDBColumnName(f reflect.StructField) string {
-	tag := f.Tag.Get("db")
-	if tag == "" {
-		return f.Name
-	}
-	parts := strings.Split(tag, ",")
-	if parts[0] != "" {
-		return parts[0]
-	}
-	return f.Name
-}
-
-// findFieldByDBTag finds a struct field matching the given name.
-func findFieldByDBTag(typ reflect.Type, name string) (reflect.StructField, bool) {
-	for i := 0; i < typ.NumField(); i++ {
-		f := typ.Field(i)
-		if !f.IsExported() {
-			continue
-		}
-		colName := getDBColumnName(f)
-		if colName == name || f.Name == name {
-			return f, true
-		}
-	}
-	return reflect.StructField{}, false
-}
-
 func (t *Table) Ins(example any, _ time.Duration) error {
 	if t.cacheKey == "" {
 		return ErrNotFound
 	}
 
-	val := reflect.ValueOf(example)
-	for val.Kind() == reflect.Ptr {
-		val = val.Elem()
-	}
+	val := helpers.UnwrapValue(reflect.ValueOf(example))
 	if val.Kind() != reflect.Struct {
 		return fmt.Errorf("example must be struct or pointer to struct")
 	}
 	typ := val.Type()
 
-	f, found := findFieldByDBTag(typ, t.cacheKey)
+	f, found := helpers.FindFieldByDBTag(typ, t.cacheKey)
 	if !found {
 		return ErrNotFound
 	}
@@ -76,16 +46,13 @@ func (t *Table) Get(example any, whereFields []string, _ time.Duration) ([]any, 
 		return nil, ErrNotFound
 	}
 
-	val := reflect.ValueOf(example)
-	for val.Kind() == reflect.Ptr {
-		val = val.Elem()
-	}
+	val := helpers.UnwrapValue(reflect.ValueOf(example))
 	if val.Kind() != reflect.Struct {
 		return nil, fmt.Errorf("example must be struct or pointer to struct")
 	}
 	typ := val.Type()
 
-	f, found := findFieldByDBTag(typ, t.cacheKey)
+	f, found := helpers.FindFieldByDBTag(typ, t.cacheKey)
 	if !found {
 		return nil, ErrNotFound
 	}
@@ -112,16 +79,13 @@ func (t *Table) Set(example any, whereFields []string, _ time.Duration) error {
 		return ErrNotFound
 	}
 
-	val := reflect.ValueOf(example)
-	for val.Kind() == reflect.Ptr {
-		val = val.Elem()
-	}
+	val := helpers.UnwrapValue(reflect.ValueOf(example))
 	if val.Kind() != reflect.Struct {
 		return fmt.Errorf("example must be struct or pointer to struct")
 	}
 	typ := val.Type()
 
-	f, found := findFieldByDBTag(typ, t.cacheKey)
+	f, found := helpers.FindFieldByDBTag(typ, t.cacheKey)
 	if !found {
 		return ErrNotFound
 	}
@@ -143,16 +107,13 @@ func (t *Table) Del(example any, whereFields []string, _ time.Duration) error {
 		return ErrNotFound
 	}
 
-	val := reflect.ValueOf(example)
-	for val.Kind() == reflect.Ptr {
-		val = val.Elem()
-	}
+	val := helpers.UnwrapValue(reflect.ValueOf(example))
 	if val.Kind() != reflect.Struct {
 		return fmt.Errorf("example must be struct or pointer to struct")
 	}
 	typ := val.Type()
 
-	f, found := findFieldByDBTag(typ, t.cacheKey)
+	f, found := helpers.FindFieldByDBTag(typ, t.cacheKey)
 	if !found {
 		return ErrNotFound
 	}
