@@ -35,3 +35,8 @@ func NewDatabase(cfg map[string]string) (*Database, error) {
 func (m *Database) Close() error {
 	return m.db.Close()
 }
+
+func (m *Database) Exec(query string, args ...any) error {
+	_, err := m.db.Exec(query, args...)
+	return err
+}

@@ -119,17 +119,13 @@ func (t *Table) Set(example any, whereFields []string, _ time.Duration) error {
 	}
 	typ := val.Type()
 
-	whereClause, args, err := helpers.BuildWhereClause(typ, val, whereFields, "")
-	if err != nil {
-		return err
-	}
-
 	whereSet := make(map[string]bool)
 	for _, fn := range whereFields {
 		whereSet[fn] = true
 	}
 
 	var sets []string
+	var setArgs []any
 	for i := 0; i < typ.NumField(); i++ {
 		f := typ.Field(i)
 		if !f.IsExported() {
@@ -139,14 +135,25 @@ func (t *Table) Set(example any, whereFields []string, _ time.Duration) error {
 		if whereSet[colName] || whereSet[f.Name] {
 			continue
 		}
+		_, tags := helpers.ParseDBTag(f)
+		if tags["autoinc"] {
+			continue
+		}
 		fv := val.Field(i)
 		sets = append(sets, fmt.Sprintf("`%s`=?", colName))
-		args = append(args, fv.Interface())
+		setArgs = append(setArgs, fv.Interface())
 	}
 
 	if len(sets) == 0 {
 		return fmt.Errorf("no fields to set")
 	}
+
+	whereClause, whereArgs, err := helpers.BuildWhereClause(typ, val, whereFields, "")
+	if err != nil {
+		return err
+	}
+
+	args := append(setArgs, whereArgs...)
 
 	query := fmt.Sprintf("UPDATE `%s` SET %s", t.tableName, strings.Join(sets, ","))
 	if whereClause != "" {
