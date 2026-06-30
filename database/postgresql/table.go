@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Carry-Rao/goutils/database/helpers"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -16,55 +17,8 @@ type Table struct {
 	typ   reflect.Type
 }
 
-func getDBColumnName(f reflect.StructField) string {
-	tag := f.Tag.Get("db")
-	if tag == "" {
-		return f.Name
-	}
-	parts := strings.Split(tag, ",")
-	if parts[0] != "" {
-		return parts[0]
-	}
-	return f.Name
-}
-
-func findFieldByDBTag(typ reflect.Type, name string) (reflect.StructField, bool) {
-	for i := 0; i < typ.NumField(); i++ {
-		f := typ.Field(i)
-		if !f.IsExported() {
-			continue
-		}
-		colName := getDBColumnName(f)
-		if colName == name || f.Name == name {
-			return f, true
-		}
-	}
-	return reflect.StructField{}, false
-}
-
-func buildWhereClause(typ reflect.Type, val reflect.Value, whereFields []string) (string, []any, error) {
-	var conds []string
-	var args []any
-	paramIdx := 1
-	for _, fieldName := range whereFields {
-		f, found := findFieldByDBTag(typ, fieldName)
-		if !found {
-			return "", nil, fmt.Errorf("field %q not found in struct", fieldName)
-		}
-		fv := val.FieldByIndex(f.Index)
-		colName := getDBColumnName(f)
-		conds = append(conds, fmt.Sprintf("%s=$%d", colName, paramIdx))
-		args = append(args, fv.Interface())
-		paramIdx++
-	}
-	return strings.Join(conds, " AND "), args, nil
-}
-
 func (t *Table) Ins(example any, _ time.Duration) error {
-	val := reflect.ValueOf(example)
-	for val.Kind() == reflect.Ptr {
-		val = val.Elem()
-	}
+	val := helpers.UnwrapValue(reflect.ValueOf(example))
 	if val.Kind() != reflect.Struct {
 		return fmt.Errorf("example must be struct or pointer to struct")
 	}
@@ -79,11 +33,11 @@ func (t *Table) Ins(example any, _ time.Duration) error {
 		if !f.IsExported() {
 			continue
 		}
-		colName := getDBColumnName(f)
-		tag := f.Tag.Get("db")
-		if strings.Contains(tag, "autoinc") {
+		_, tags := helpers.ParseDBTag(f)
+		if tags["autoinc"] {
 			continue
 		}
+		colName := helpers.GetDBColumnName(f)
 		cols = append(cols, colName)
 		placeholders = append(placeholders, fmt.Sprintf("$%d", paramIdx))
 		args = append(args, val.Field(i).Interface())
@@ -92,34 +46,32 @@ func (t *Table) Ins(example any, _ time.Duration) error {
 	if len(cols) == 0 {
 		return fmt.Errorf("struct has no exported fields")
 	}
-	sql := fmt.Sprintf("INSERT INTO %s (%s) VALUES (%s)",
+	query := fmt.Sprintf("INSERT INTO %s (%s) VALUES (%s)",
 		t.table,
 		strings.Join(cols, ","),
 		strings.Join(placeholders, ","))
-	_, err := t.pool.Exec(context.Background(), sql, args...)
+	_, err := t.pool.Exec(context.Background(), query, args...)
 	return err
 }
 
 func (t *Table) Get(example any, whereFields []string, _ time.Duration) ([]any, error) {
-	val := reflect.ValueOf(example)
-	for val.Kind() == reflect.Ptr {
-		val = val.Elem()
-	}
+	val := helpers.UnwrapValue(reflect.ValueOf(example))
 	if val.Kind() != reflect.Struct {
 		return nil, fmt.Errorf("example must be struct or pointer to struct")
 	}
 	typ := val.Type()
 
-	whereClause, args, err := buildWhereClause(typ, val, whereFields)
+	whereClause, args, err := helpers.BuildWhereClause(typ, val, whereFields, "pg")
 	if err != nil {
 		return nil, err
 	}
 
-	sql := fmt.Sprintf("SELECT * FROM %s WHERE %s", t.table, whereClause)
-	if whereClause == "" {
-		sql = fmt.Sprintf("SELECT * FROM %s", t.table)
+	query := fmt.Sprintf("SELECT * FROM %s", t.table)
+	if whereClause != "" {
+		query = fmt.Sprintf("SELECT * FROM %s WHERE %s", t.table, whereClause)
 	}
-	rows, err := t.pool.Query(context.Background(), sql, args...)
+
+	rows, err := t.pool.Query(context.Background(), query, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -147,7 +99,7 @@ func (t *Table) Get(example any, whereFields []string, _ time.Duration) ([]any, 
 			if !f.IsExported() {
 				continue
 			}
-			colName := getDBColumnName(f)
+			colName := helpers.GetDBColumnName(f)
 			if idx, ok := colIndex[colName]; ok && idx < len(values) {
 				v := values[idx]
 				if v != nil {
@@ -162,16 +114,13 @@ func (t *Table) Get(example any, whereFields []string, _ time.Duration) ([]any, 
 }
 
 func (t *Table) Set(example any, whereFields []string, _ time.Duration) error {
-	val := reflect.ValueOf(example)
-	for val.Kind() == reflect.Ptr {
-		val = val.Elem()
-	}
+	val := helpers.UnwrapValue(reflect.ValueOf(example))
 	if val.Kind() != reflect.Struct {
 		return fmt.Errorf("example must be struct or pointer to struct")
 	}
 	typ := val.Type()
 
-	whereClause, args, err := buildWhereClause(typ, val, whereFields)
+	whereClause, args, err := helpers.BuildWhereClause(typ, val, whereFields, "pg")
 	if err != nil {
 		return err
 	}
@@ -188,7 +137,7 @@ func (t *Table) Set(example any, whereFields []string, _ time.Duration) error {
 		if !f.IsExported() {
 			continue
 		}
-		colName := getDBColumnName(f)
+		colName := helpers.GetDBColumnName(f)
 		if whereSet[colName] || whereSet[f.Name] {
 			continue
 		}
@@ -202,33 +151,30 @@ func (t *Table) Set(example any, whereFields []string, _ time.Duration) error {
 		return fmt.Errorf("no fields to set")
 	}
 
-	sql := fmt.Sprintf("UPDATE %s SET %s", t.table, strings.Join(sets, ","))
+	query := fmt.Sprintf("UPDATE %s SET %s", t.table, strings.Join(sets, ","))
 	if whereClause != "" {
-		sql = fmt.Sprintf("UPDATE %s SET %s WHERE %s", t.table, strings.Join(sets, ","), whereClause)
+		query = fmt.Sprintf("UPDATE %s SET %s WHERE %s", t.table, strings.Join(sets, ","), whereClause)
 	}
-	_, err = t.pool.Exec(context.Background(), sql, args...)
+	_, err = t.pool.Exec(context.Background(), query, args...)
 	return err
 }
 
 func (t *Table) Del(example any, whereFields []string, _ time.Duration) error {
-	val := reflect.ValueOf(example)
-	for val.Kind() == reflect.Ptr {
-		val = val.Elem()
-	}
+	val := helpers.UnwrapValue(reflect.ValueOf(example))
 	if val.Kind() != reflect.Struct {
 		return fmt.Errorf("example must be struct or pointer to struct")
 	}
 	typ := val.Type()
 
-	whereClause, args, err := buildWhereClause(typ, val, whereFields)
+	whereClause, args, err := helpers.BuildWhereClause(typ, val, whereFields, "pg")
 	if err != nil {
 		return err
 	}
 
-	sql := fmt.Sprintf("DELETE FROM %s", t.table)
+	query := fmt.Sprintf("DELETE FROM %s", t.table)
 	if whereClause != "" {
-		sql = fmt.Sprintf("DELETE FROM %s WHERE %s", t.table, whereClause)
+		query = fmt.Sprintf("DELETE FROM %s WHERE %s", t.table, whereClause)
 	}
-	_, err = t.pool.Exec(context.Background(), sql, args...)
+	_, err = t.pool.Exec(context.Background(), query, args...)
 	return err
 }
