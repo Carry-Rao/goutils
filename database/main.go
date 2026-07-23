@@ -32,7 +32,7 @@ func NewDatabase(dbType api.DbType, config map[string]string) (api.Database, err
 	case api.Mixture:
 		return mixture.NewDatabase(config)
 	}
-	return nil, errors.New(fmt.Sprintf("unknown database type: %d", dbType))
+	return nil, fmt.Errorf("unknown database type: %d", dbType)
 }
 
 func NewDatabaseByName(name string, config map[string]string) (api.Database, error) {
