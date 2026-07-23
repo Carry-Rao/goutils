@@ -23,7 +23,7 @@ func (r *Database) Create(tableName string, config map[string]api.Config) error 
 	return nil
 }
 
-func (r *Database) GetTable(tableName string, _ any) (api.Table, error) {
+func (r *Database) GetTable(tableName string, example any) (api.Table, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 
@@ -31,10 +31,12 @@ func (r *Database) GetTable(tableName string, _ any) (api.Table, error) {
 		return nil, nil
 	}
 
+	schema := api.GetOrBuildSchema(api.TypeOf(example))
 	return &Table{
 		db:        r,
 		tableName: tableName,
 		cacheKey:  r.cacheField[tableName],
+		schema:    schema,
 	}, nil
 }
 

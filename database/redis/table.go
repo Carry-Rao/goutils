@@ -6,13 +6,14 @@ import (
 	"reflect"
 	"time"
 
-	"github.com/Carry-Rao/goutils/database/helpers"
+	"github.com/Carry-Rao/goutils/database/api"
 )
 
 type Table struct {
 	db        *Database
 	tableName string
 	cacheKey  string
+	schema    *api.CachedSchema
 }
 
 func (t *Table) Ins(example any, ttl time.Duration) error {
@@ -20,27 +21,21 @@ func (t *Table) Ins(example any, ttl time.Duration) error {
 		return nil
 	}
 
-	val := helpers.UnwrapValue(reflect.ValueOf(example))
-	if val.Kind() != reflect.Struct {
+	val := api.UnwrapValueOf(example)
+	if val.Kind() != api.KindStruct {
 		return fmt.Errorf("example must be struct or pointer to struct")
 	}
-	typ := val.Type()
 
-	f, found := helpers.FindFieldByDBTag(typ, t.cacheKey)
+	f, found := t.schema.FieldMap[t.cacheKey]
 	if !found {
 		return nil
 	}
-	idVal := val.FieldByIndex(f.Index).Interface()
-	key := fmt.Sprintf("%s_%v", t.tableName, idVal)
+	idVal := val.Field(f.Index).Interface()
+	key := t.tableName + "_" + fmt.Sprintf("%v", idVal)
 
-	data := make(map[string]any)
-	for i := 0; i < typ.NumField(); i++ {
-		field := typ.Field(i)
-		if !field.IsExported() {
-			continue
-		}
-		colName := helpers.GetDBColumnName(field)
-		data[colName] = val.Field(i).Interface()
+	data := make(map[string]any, len(t.schema.Fields))
+	for _, field := range t.schema.Fields {
+		data[field.ColumnName] = val.Field(field.Index).Interface()
 	}
 
 	return t.db.client.HSet(context.Background(), key, data).Err()
@@ -51,20 +46,19 @@ func (t *Table) Get(example any, whereFields []string, _ time.Duration) ([]any, 
 		return nil, fmt.Errorf("not found")
 	}
 
-	val := helpers.UnwrapValue(reflect.ValueOf(example))
-	if val.Kind() != reflect.Struct {
+	val := api.UnwrapValueOf(example)
+	if val.Kind() != api.KindStruct {
 		return nil, fmt.Errorf("example must be struct or pointer to struct")
 	}
-	typ := val.Type()
 
-	f, found := helpers.FindFieldByDBTag(typ, t.cacheKey)
+	f, found := t.schema.FieldMap[t.cacheKey]
 	if !found {
 		return nil, fmt.Errorf("not found")
 	}
-	idVal := val.FieldByIndex(f.Index).Interface()
-	key := fmt.Sprintf("%s_%v", t.tableName, idVal)
+	idVal := val.Field(f.Index).Interface()
+	key := t.tableName + "_" + fmt.Sprintf("%v", idVal)
 
-	result := reflect.New(typ).Elem()
+	result := api.NewStruct(t.schema.Type)
 
 	data, err := t.db.client.HGetAll(context.Background(), key).Result()
 	if err != nil {
@@ -74,14 +68,9 @@ func (t *Table) Get(example any, whereFields []string, _ time.Duration) ([]any, 
 		return nil, nil
 	}
 
-	for i := 0; i < typ.NumField(); i++ {
-		field := typ.Field(i)
-		if !field.IsExported() {
-			continue
-		}
-		colName := helpers.GetDBColumnName(field)
-		if strVal, ok := data[colName]; ok {
-			setFieldFromString(result.Field(i), strVal)
+	for _, field := range t.schema.Fields {
+		if strVal, ok := data[field.ColumnName]; ok {
+			setFieldFromString(result.Field(field.Index), strVal)
 		}
 	}
 
@@ -93,27 +82,21 @@ func (t *Table) Set(example any, whereFields []string, ttl time.Duration) error 
 		return nil
 	}
 
-	val := helpers.UnwrapValue(reflect.ValueOf(example))
-	if val.Kind() != reflect.Struct {
+	val := api.UnwrapValueOf(example)
+	if val.Kind() != api.KindStruct {
 		return fmt.Errorf("example must be struct or pointer to struct")
 	}
-	typ := val.Type()
 
-	f, found := helpers.FindFieldByDBTag(typ, t.cacheKey)
+	f, found := t.schema.FieldMap[t.cacheKey]
 	if !found {
 		return fmt.Errorf("missing cache key")
 	}
-	idVal := val.FieldByIndex(f.Index).Interface()
-	key := fmt.Sprintf("%s_%v", t.tableName, idVal)
+	idVal := val.Field(f.Index).Interface()
+	key := t.tableName + "_" + fmt.Sprintf("%v", idVal)
 
-	data := make(map[string]any)
-	for i := 0; i < typ.NumField(); i++ {
-		field := typ.Field(i)
-		if !field.IsExported() {
-			continue
-		}
-		colName := helpers.GetDBColumnName(field)
-		data[colName] = val.Field(i).Interface()
+	data := make(map[string]any, len(t.schema.Fields))
+	for _, field := range t.schema.Fields {
+		data[field.ColumnName] = val.Field(field.Index).Interface()
 	}
 
 	return t.db.client.HSet(context.Background(), key, data).Err()
@@ -124,18 +107,17 @@ func (t *Table) Del(example any, whereFields []string, _ time.Duration) error {
 		return nil
 	}
 
-	val := helpers.UnwrapValue(reflect.ValueOf(example))
-	if val.Kind() != reflect.Struct {
+	val := api.UnwrapValueOf(example)
+	if val.Kind() != api.KindStruct {
 		return fmt.Errorf("example must be struct or pointer to struct")
 	}
-	typ := val.Type()
 
-	f, found := helpers.FindFieldByDBTag(typ, t.cacheKey)
+	f, found := t.schema.FieldMap[t.cacheKey]
 	if !found {
 		return nil
 	}
-	idVal := val.FieldByIndex(f.Index).Interface()
-	key := fmt.Sprintf("%s_%v", t.tableName, idVal)
+	idVal := val.Field(f.Index).Interface()
+	key := t.tableName + "_" + fmt.Sprintf("%v", idVal)
 
 	return t.db.client.Del(context.Background(), key).Err()
 }

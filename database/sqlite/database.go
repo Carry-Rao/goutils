@@ -7,7 +7,6 @@ import (
 	"strings"
 
 	"github.com/Carry-Rao/goutils/database/api"
-	"github.com/Carry-Rao/goutils/database/helpers"
 )
 
 func (s *Database) Create(tableName string, config map[string]api.Config) error {
@@ -74,41 +73,33 @@ func (s *Database) GetTable(tableName string, example any) (api.Table, error) {
 			return nil, err
 		}
 	}
-	return &Table{typ: reflect.TypeOf(example), db: s.db, tableName: tableName}, nil
+	schema := api.GetOrBuildSchema(api.TypeOf(example))
+	return &Table{schema: schema, db: s.db, tableName: tableName, insertQry: schema.BuildInsertQueryMysql(tableName)}, nil
 }
 
 func (s *Database) CreateFromStruct(tableName string, example any) error {
-	t := helpers.UnwrapType(reflect.TypeOf(example))
-	if t.Kind() != reflect.Struct {
-		return fmt.Errorf("example must be struct or pointer to struct")
-	}
+	schema := api.GetOrBuildSchema(api.TypeOf(example))
 
 	var columns []string
 	var pks []string
 
-	for i := 0; i < t.NumField(); i++ {
-		f := t.Field(i)
-		if !f.IsExported() {
-			continue
-		}
-
-		colName, tags := helpers.ParseDBTag(f)
-		sqlType := helpers.MapGoTypeToSQL(f.Type.Kind())
+	for _, field := range schema.Fields {
+		sqlType := mapGoTypeToSQL(field.GoKind)
 
 		var buf strings.Builder
-		fmt.Fprintf(&buf, "`%s` %s", colName, sqlType)
+		fmt.Fprintf(&buf, "`%s` %s", field.ColumnName, sqlType)
 
-		if tags["autoinc"] {
+		if field.IsAutoInc {
 			buf.WriteString(" PRIMARY KEY AUTOINCREMENT")
 		} else {
-			if !tags["null"] {
+			if !field.IsNullable {
 				buf.WriteString(" NOT NULL")
 			}
-			if tags["primary"] {
-				pks = append(pks, fmt.Sprintf("`%s`", colName))
+			if field.IsPrimary {
+				pks = append(pks, fmt.Sprintf("`%s`", field.ColumnName))
 			}
 		}
-		if tags["unique"] {
+		if field.IsUnique {
 			buf.WriteString(" UNIQUE")
 		}
 
@@ -131,4 +122,19 @@ func (s *Database) CreateFromStruct(tableName string, example any) error {
 func (s *Database) DeleteTable(tableName string) error {
 	_, err := s.db.Exec(fmt.Sprintf("DROP TABLE IF EXISTS %s", tableName))
 	return err
+}
+
+func mapGoTypeToSQL(kind reflect.Kind) string {
+	switch kind {
+	case reflect.String:
+		return "TEXT"
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+		return "INTEGER"
+	case reflect.Bool:
+		return "INTEGER"
+	case reflect.Float32, reflect.Float64:
+		return "REAL"
+	default:
+		return "TEXT"
+	}
 }

@@ -3,7 +3,6 @@ package postgresql
 import (
 	"context"
 	"fmt"
-	"reflect"
 	"strings"
 
 	"github.com/Carry-Rao/goutils/database/api"
@@ -60,7 +59,8 @@ func (p *Database) GetTable(tableName string, example any) (api.Table, error) {
 	if !exists {
 		return nil, fmt.Errorf("table %s not exists", tableName)
 	}
-	return &Table{pool: p.pool, table: tableName, typ: reflect.TypeOf(example)}, nil
+	schema := api.GetOrBuildSchema(api.TypeOf(example))
+	return &Table{pool: p.pool, table: tableName, schema: schema, insertQry: schema.BuildInsertQueryPG(tableName)}, nil
 }
 
 func (p *Database) DeleteTable(tableName string) error {

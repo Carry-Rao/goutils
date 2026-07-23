@@ -2,6 +2,7 @@ package database
 
 import (
 	"errors"
+	"fmt"
 
 	"github.com/Carry-Rao/goutils/database/api"
 
@@ -14,23 +15,22 @@ import (
 	"github.com/Carry-Rao/goutils/database/sqlite"
 )
 
-func NewDatabase(config map[string]string) (api.Database, error) {
-	typ := config["type"]
-	switch typ {
-	case "redis":
-		return redis.NewDatabase(config)
-	case "memory":
-		return memory.NewDatabase(config)
-	case "mysql":
+func NewDatabase(dbType api.DbType, config map[string]string) (api.Database, error) {
+	switch dbType {
+	case api.MySQL:
 		return mysql.NewDatabase(config)
-	case "sqlite":
-		return sqlite.NewDatabase(config)
-	case "postgresql":
+	case api.PostgreSQL:
 		return postgresql.NewDatabase(config)
-	case "bloom":
+	case api.SQLite:
+		return sqlite.NewDatabase(config)
+	case api.Redis:
+		return redis.NewDatabase(config)
+	case api.Memory:
+		return memory.NewDatabase(config)
+	case api.Bloom:
 		return bloom.NewDatabase(config)
-	case "mixture":
+	case api.Mixture:
 		return mixture.NewDatabase(config)
 	}
-	return nil, errors.New("unknown database type")
+	return nil, errors.New(fmt.Sprintf("unknown database type: %d", dbType))
 }

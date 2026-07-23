@@ -2,7 +2,6 @@ package mysql
 
 import (
 	"fmt"
-	"reflect"
 	"strings"
 
 	"github.com/Carry-Rao/goutils/database/api"
@@ -47,7 +46,8 @@ func (m *Database) GetTable(tableName string, example any) (api.Table, error) {
 	if !exists {
 		return nil, fmt.Errorf("table not exists")
 	}
-	return &Table{db: m.db, tableName: tableName, typ: reflect.TypeOf(example)}, nil
+	schema := api.GetOrBuildSchema(api.TypeOf(example))
+	return &Table{db: m.db, tableName: tableName, schema: schema, insertQry: schema.BuildInsertQueryMysql(tableName)}, nil
 }
 
 func (m *Database) DeleteTable(tableName string) error {

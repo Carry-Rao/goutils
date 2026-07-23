@@ -2,33 +2,32 @@ package memory
 
 import (
 	"fmt"
-	"reflect"
 	"sync"
 	"time"
 
-	"github.com/Carry-Rao/goutils/database/helpers"
+	"github.com/Carry-Rao/goutils/database/api"
 )
 
 type Table struct {
 	db        *Database
 	tableName string
 	cacheKey  string
+	schema    *api.CachedSchema
 	mu        sync.RWMutex
 }
 
 func (t *Table) Ins(example any, ttl time.Duration) error {
-	val := helpers.UnwrapValue(reflect.ValueOf(example))
-	if val.Kind() != reflect.Struct {
+	val := api.UnwrapValueOf(example)
+	if val.Kind() != api.KindStruct {
 		return fmt.Errorf("example must be struct or pointer to struct")
 	}
-	typ := val.Type()
 
-	pkField, found := helpers.FindFieldByDBTag(typ, t.cacheKey)
+	f, found := t.schema.FieldMap[t.cacheKey]
 	if !found {
 		return fmt.Errorf("primary key field %q not found", t.cacheKey)
 	}
-	idVal := val.FieldByIndex(pkField.Index).Interface()
-	key := fmt.Sprintf("%s_%v", t.tableName, idVal)
+	idVal := val.Field(f.Index).Interface()
+	key := t.tableName + "_" + fmt.Sprintf("%v", idVal)
 
 	entry := &entry{
 		data:    example,
@@ -42,18 +41,17 @@ func (t *Table) Ins(example any, ttl time.Duration) error {
 }
 
 func (t *Table) Get(example any, whereFields []string, _ time.Duration) ([]any, error) {
-	val := helpers.UnwrapValue(reflect.ValueOf(example))
-	if val.Kind() != reflect.Struct {
+	val := api.UnwrapValueOf(example)
+	if val.Kind() != api.KindStruct {
 		return nil, fmt.Errorf("example must be struct or pointer to struct")
 	}
-	typ := val.Type()
 
-	pkField, found := helpers.FindFieldByDBTag(typ, t.cacheKey)
+	f, found := t.schema.FieldMap[t.cacheKey]
 	if !found {
 		return nil, fmt.Errorf("primary key field %q not found", t.cacheKey)
 	}
-	idVal := val.FieldByIndex(pkField.Index).Interface()
-	key := fmt.Sprintf("%s_%v", t.tableName, idVal)
+	idVal := val.Field(f.Index).Interface()
+	key := t.tableName + "_" + fmt.Sprintf("%v", idVal)
 
 	t.mu.RLock()
 	defer t.mu.RUnlock()
@@ -77,18 +75,17 @@ func (t *Table) Get(example any, whereFields []string, _ time.Duration) ([]any, 
 }
 
 func (t *Table) Set(example any, whereFields []string, ttl time.Duration) error {
-	val := helpers.UnwrapValue(reflect.ValueOf(example))
-	if val.Kind() != reflect.Struct {
+	val := api.UnwrapValueOf(example)
+	if val.Kind() != api.KindStruct {
 		return fmt.Errorf("example must be struct or pointer to struct")
 	}
-	typ := val.Type()
 
-	pkField, found := helpers.FindFieldByDBTag(typ, t.cacheKey)
+	f, found := t.schema.FieldMap[t.cacheKey]
 	if !found {
 		return fmt.Errorf("primary key field %q not found", t.cacheKey)
 	}
-	idVal := val.FieldByIndex(pkField.Index).Interface()
-	key := fmt.Sprintf("%s_%v", t.tableName, idVal)
+	idVal := val.Field(f.Index).Interface()
+	key := t.tableName + "_" + fmt.Sprintf("%v", idVal)
 
 	t.mu.Lock()
 	defer t.mu.Unlock()
@@ -102,18 +99,17 @@ func (t *Table) Set(example any, whereFields []string, ttl time.Duration) error 
 }
 
 func (t *Table) Del(example any, whereFields []string, _ time.Duration) error {
-	val := helpers.UnwrapValue(reflect.ValueOf(example))
-	if val.Kind() != reflect.Struct {
+	val := api.UnwrapValueOf(example)
+	if val.Kind() != api.KindStruct {
 		return fmt.Errorf("example must be struct or pointer to struct")
 	}
-	typ := val.Type()
 
-	pkField, found := helpers.FindFieldByDBTag(typ, t.cacheKey)
+	f, found := t.schema.FieldMap[t.cacheKey]
 	if !found {
 		return fmt.Errorf("primary key field %q not found", t.cacheKey)
 	}
-	idVal := val.FieldByIndex(pkField.Index).Interface()
-	key := fmt.Sprintf("%s_%v", t.tableName, idVal)
+	idVal := val.Field(f.Index).Interface()
+	key := t.tableName + "_" + fmt.Sprintf("%v", idVal)
 
 	t.mu.Lock()
 	defer t.mu.Unlock()

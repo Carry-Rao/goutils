@@ -3,69 +3,46 @@ package mysql
 import (
 	"database/sql"
 	"fmt"
-	"reflect"
 	"strings"
 	"time"
 
-	"github.com/Carry-Rao/goutils/database/helpers"
+	"github.com/Carry-Rao/goutils/database/api"
 )
 
 type Table struct {
 	db        *sql.DB
 	tableName string
-	typ       reflect.Type
+	schema    *api.CachedSchema
+	insertQry string
 }
 
 func (t *Table) Ins(example any, _ time.Duration) error {
-	val := helpers.UnwrapValue(reflect.ValueOf(example))
-	if val.Kind() != reflect.Struct {
+	val := api.UnwrapValueOf(example)
+	if val.Kind() != api.KindStruct {
 		return fmt.Errorf("example must be struct or pointer to struct")
 	}
-	typ := val.Type()
-
-	var cols []string
-	var placeholders []string
-	var args []any
-	for i := 0; i < typ.NumField(); i++ {
-		f := typ.Field(i)
-		if !f.IsExported() {
-			continue
-		}
-		_, tags := helpers.ParseDBTag(f)
-		if tags["autoinc"] {
-			continue
-		}
-		colName := helpers.GetDBColumnName(f)
-		cols = append(cols, fmt.Sprintf("`%s`", colName))
-		placeholders = append(placeholders, "?")
-		args = append(args, val.Field(i).Interface())
-	}
-	if len(cols) == 0 {
+	args := t.schema.ExtractValues(val)
+	if len(args) == 0 {
 		return fmt.Errorf("struct has no exported fields")
 	}
-	query := fmt.Sprintf("INSERT INTO `%s` (%s) VALUES (%s)",
-		t.tableName,
-		strings.Join(cols, ","),
-		strings.Join(placeholders, ","))
-	_, err := t.db.Exec(query, args...)
+	_, err := t.db.Exec(t.insertQry, args...)
 	return err
 }
 
 func (t *Table) Get(example any, whereFields []string, _ time.Duration) ([]any, error) {
-	val := helpers.UnwrapValue(reflect.ValueOf(example))
-	if val.Kind() != reflect.Struct {
+	val := api.UnwrapValueOf(example)
+	if val.Kind() != api.KindStruct {
 		return nil, fmt.Errorf("example must be struct or pointer to struct")
 	}
-	typ := val.Type()
 
-	whereClause, args, err := helpers.BuildWhereClause(typ, val, whereFields, "")
+	whereClause, args, err := t.schema.BuildWhereClause(val, whereFields, "")
 	if err != nil {
 		return nil, err
 	}
 
-	query := fmt.Sprintf("SELECT * FROM `%s`", t.tableName)
+	query := "SELECT * FROM `" + t.tableName + "`"
 	if whereClause != "" {
-		query = fmt.Sprintf("SELECT * FROM `%s` WHERE %s", t.tableName, whereClause)
+		query += " WHERE " + whereClause
 	}
 
 	rows, err := t.db.Query(query, args...)
@@ -86,21 +63,16 @@ func (t *Table) Get(example any, whereFields []string, _ time.Duration) ([]any, 
 
 	var results []any
 	for rows.Next() {
-		result := reflect.New(typ).Elem()
+		result := api.NewStruct(t.schema.Type)
 		scanPtrs := make([]any, len(cols))
 		tmpBuf := make([]*interface{}, len(cols))
 		for i := range tmpBuf {
 			tmpBuf[i] = new(interface{})
 			scanPtrs[i] = tmpBuf[i]
 		}
-		for i := 0; i < typ.NumField(); i++ {
-			f := typ.Field(i)
-			if !f.IsExported() {
-				continue
-			}
-			colName := helpers.GetDBColumnName(f)
-			if idx, ok := colIndex[colName]; ok {
-				scanPtrs[idx] = result.Field(i).Addr().Interface()
+		for _, field := range t.schema.Fields {
+			if idx, ok := colIndex[field.ColumnName]; ok {
+				scanPtrs[idx] = result.Field(field.Index).Addr().Interface()
 			}
 		}
 		if err := rows.Scan(scanPtrs...); err != nil {
@@ -113,71 +85,58 @@ func (t *Table) Get(example any, whereFields []string, _ time.Duration) ([]any, 
 }
 
 func (t *Table) Set(example any, whereFields []string, _ time.Duration) error {
-	val := helpers.UnwrapValue(reflect.ValueOf(example))
-	if val.Kind() != reflect.Struct {
+	val := api.UnwrapValueOf(example)
+	if val.Kind() != api.KindStruct {
 		return fmt.Errorf("example must be struct or pointer to struct")
 	}
-	typ := val.Type()
 
-	whereSet := make(map[string]bool)
+	whereSet := make(map[string]bool, len(whereFields))
 	for _, fn := range whereFields {
 		whereSet[fn] = true
 	}
 
 	var sets []string
 	var setArgs []any
-	for i := 0; i < typ.NumField(); i++ {
-		f := typ.Field(i)
-		if !f.IsExported() {
+	for _, field := range t.schema.Insertable {
+		if whereSet[field.ColumnName] || whereSet[field.GoFieldName] {
 			continue
 		}
-		colName := helpers.GetDBColumnName(f)
-		if whereSet[colName] || whereSet[f.Name] {
-			continue
-		}
-		_, tags := helpers.ParseDBTag(f)
-		if tags["autoinc"] {
-			continue
-		}
-		fv := val.Field(i)
-		sets = append(sets, fmt.Sprintf("`%s`=?", colName))
-		setArgs = append(setArgs, fv.Interface())
+		sets = append(sets, "`"+field.ColumnName+"`=?")
+		setArgs = append(setArgs, val.Field(field.Index).Interface())
 	}
 
 	if len(sets) == 0 {
 		return fmt.Errorf("no fields to set")
 	}
 
-	whereClause, whereArgs, err := helpers.BuildWhereClause(typ, val, whereFields, "")
+	whereClause, whereArgs, err := t.schema.BuildWhereClause(val, whereFields, "")
 	if err != nil {
 		return err
 	}
 
 	args := append(setArgs, whereArgs...)
-
-	query := fmt.Sprintf("UPDATE `%s` SET %s", t.tableName, strings.Join(sets, ","))
+	query := "UPDATE `" + t.tableName + "` SET " + strings.Join(sets, ",")
 	if whereClause != "" {
-		query = fmt.Sprintf("UPDATE `%s` SET %s WHERE %s", t.tableName, strings.Join(sets, ","), whereClause)
+		query += " WHERE " + whereClause
 	}
 	_, err = t.db.Exec(query, args...)
 	return err
 }
 
 func (t *Table) Del(example any, whereFields []string, _ time.Duration) error {
-	val := helpers.UnwrapValue(reflect.ValueOf(example))
-	if val.Kind() != reflect.Struct {
+	val := api.UnwrapValueOf(example)
+	if val.Kind() != api.KindStruct {
 		return fmt.Errorf("example must be struct or pointer to struct")
 	}
-	typ := val.Type()
 
-	whereClause, args, err := helpers.BuildWhereClause(typ, val, whereFields, "")
+	whereClause, args, err := t.schema.BuildWhereClause(val, whereFields, "")
 	if err != nil {
 		return err
 	}
 
-	query := fmt.Sprintf("DELETE FROM `%s`", t.tableName)
+	query := "DELETE FROM `" + t.tableName + "`"
 	if whereClause != "" {
-		query = fmt.Sprintf("DELETE FROM `%s` WHERE %s", t.tableName, whereClause)
+		query += " WHERE " + whereClause
 	}
 	_, err = t.db.Exec(query, args...)
 	return err
