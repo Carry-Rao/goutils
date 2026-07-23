@@ -2,14 +2,16 @@
 
 ## Quick Start
 
-Use `database.NewDatabase()` to create a database instance. Specify the database type via the `type` field:
+Use `database.NewDatabase()` to create a database instance. Specify the database type via the `api.DbType` enum:
 
 ```go
-import "github.com/Carry-Rao/goutils/database"
+import (
+    "github.com/Carry-Rao/goutils/database"
+    "github.com/Carry-Rao/goutils/database/api"
+)
 
 // Create a MySQL instance
-db, _ := database.NewDatabase(map[string]string{
-    "type":     "mysql",
+db, _ := database.NewDatabase(api.MySQL, map[string]string{
     "user":     "root",
     "password": "123456",
     "host":     "127.0.0.1",
@@ -34,6 +36,21 @@ table.Del(&User{Name: "Bob"}, []string{"Name"}, 0)                            //
 
 // Delete the table
 db.DeleteTable("users")
+```
+
+### Type-safe Generic Usage
+
+Use `typed.TypedTable[T]` for compile-time type safety:
+
+```go
+import "github.com/Carry-Rao/goutils/database/typed"
+
+rawTable, _ := db.GetTable("users", &User{})
+table := typed.NewTable[User](rawTable)
+
+// Compile-time type safety
+table.Ins(User{Name: "Alice"}, 0)
+users, _ := table.Get(User{}, []string{"name"}, 0) // Returns []User, not []any
 ```
 
 ## Core Concepts

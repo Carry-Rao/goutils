@@ -2,14 +2,16 @@
 
 ## 快速开始
 
-使用 `database.NewDatabase()` 创建数据库实例，通过 `type` 字段指定数据库类型：
+使用 `database.NewDatabase()` 创建数据库实例，通过 `api.DbType` 枚举指定数据库类型：
 
 ```go
-import "github.com/Carry-Rao/goutils/database"
+import (
+    "github.com/Carry-Rao/goutils/database"
+    "github.com/Carry-Rao/goutils/database/api"
+)
 
 // 创建 MySQL 实例
-db, _ := database.NewDatabase(map[string]string{
-    "type":     "mysql",
+db, _ := database.NewDatabase(api.MySQL, map[string]string{
     "user":     "root",
     "password": "123456",
     "host":     "127.0.0.1",
@@ -34,6 +36,21 @@ table.Del(&User{Name: "Bob"}, []string{"Name"}, 0)                     // 删除
 
 // 删除表
 db.DeleteTable("users")
+```
+
+### 类型安全的泛型用法
+
+使用 `typed.TypedTable[T]` 获得编译期类型检查：
+
+```go
+import "github.com/Carry-Rao/goutils/database/typed"
+
+rawTable, _ := db.GetTable("users", &User{})
+table := typed.NewTable[User](rawTable)
+
+// 编译期类型安全
+table.Ins(User{Name: "Alice"}, 0)
+users, _ := table.Get(User{}, []string{"name"}, 0) // 返回 []User，不是 []any
 ```
 
 ## 核心概念
