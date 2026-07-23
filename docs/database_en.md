@@ -143,11 +143,15 @@ Mixture lets you combine multiple databases into a data link chain, with custom 
 ### Setup
 
 ```go
-import "github.com/Carry-Rao/goutils/database/mixture"
+import (
+    "github.com/Carry-Rao/goutils/database"
+    "github.com/Carry-Rao/goutils/database/api"
+    "github.com/Carry-Rao/goutils/database/mixture"
+)
 
 // Create underlying databases
-redisDB, _ := database.NewDatabase(map[string]string{"type": "redis", "addr": "127.0.0.1:6379"})
-mysqlDB, _ := database.NewDatabase(map[string]string{"type": "mysql", /* ... */})
+redisDB, _ := database.NewDatabase(api.Redis, map[string]string{"addr": "127.0.0.1:6379"})
+mysqlDB, _ := database.NewDatabase(api.MySQL, map[string]string{/* ... */})
 
 // Build chain: Redis → MySQL, continue on Redis error, return on MySQL error
 mix := &mixture.Database{}
@@ -183,3 +187,57 @@ mix.Add(mysqlDB, mixture.Return)
 // Upper business code is unaware of the link structure — the interface is identical
 table, _ := mix.GetTable("users", &User{})
 table.Ins(&User{Name: "Alice"}, 0)
+```
+
+---
+
+## Registering Custom Databases
+
+Use `api.RegisterFactory` to register custom database backends. Implement the `api.Database` interface:
+
+```go
+package mydb
+
+import (
+    "github.com/Carry-Rao/goutils/database/api"
+)
+
+type Database struct {
+    // your database connection
+}
+
+func (d *Database) Create(tableName string, config map[string]api.Config) error {
+    return nil
+}
+
+func (d *Database) GetTable(tableName string, example any) (api.Table, error) {
+    return &Table{}, nil
+}
+
+func (d *Database) DeleteTable(tableName string) error {
+    return nil
+}
+
+func init() {
+    api.RegisterFactory("mydb", func(config map[string]string) (api.Database, error) {
+        return &Database{}, nil
+    })
+}
+```
+
+Create via `NewDatabaseByName`:
+
+```go
+import "github.com/Carry-Rao/goutils/database"
+
+db, _ := database.NewDatabaseByName("mydb", map[string]string{
+    "host": "127.0.0.1",
+})
+```
+
+Register aliases:
+
+```go
+api.Register("pg", api.PostgreSQL)
+db, _ := database.NewDatabaseByName("pg", config)
+```

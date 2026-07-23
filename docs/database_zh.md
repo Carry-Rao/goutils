@@ -143,11 +143,15 @@ Mixture 支持将多个数据库组合成一条数据链路，并自定义各层
 ### 配置
 
 ```go
-import "github.com/Carry-Rao/goutils/database/mixture"
+import (
+    "github.com/Carry-Rao/goutils/database"
+    "github.com/Carry-Rao/goutils/database/api"
+    "github.com/Carry-Rao/goutils/database/mixture"
+)
 
 // 创建底层数据库
-redisDB, _ := database.NewDatabase(map[string]string{"type": "redis", "addr": "127.0.0.1:6379"})
-mysqlDB, _ := database.NewDatabase(map[string]string{"type": "mysql", /* ... */})
+redisDB, _ := database.NewDatabase(api.Redis, map[string]string{"addr": "127.0.0.1:6379"})
+mysqlDB, _ := database.NewDatabase(api.MySQL, map[string]string{/* ... */})
 
 // 构建链路：Redis → MySQL，Redis 出错时继续，MySQL 出错时返回
 mix := &mixture.Database{}
@@ -183,3 +187,59 @@ mix.Add(mysqlDB, mixture.Return)
 // 上层业务代码无需感知链路结构，接口完全一致
 table, _ := mix.GetTable("users", &User{})
 table.Ins(&User{Name: "Alice"}, 0)
+```
+
+---
+
+## 注册自定义数据库
+
+通过 `api.RegisterFactory` 注册自定义数据库后端，实现 `api.Database` 接口即可：
+
+```go
+package mydb
+
+import (
+    "github.com/Carry-Rao/goutils/database/api"
+)
+
+type Database struct {
+    // 你的数据库连接
+}
+
+func (d *Database) Create(tableName string, config map[string]api.Config) error {
+    // 实现建表逻辑
+    return nil
+}
+
+func (d *Database) GetTable(tableName string, example any) (api.Table, error) {
+    // 返回实现了 api.Table 的对象
+    return &Table{}, nil
+}
+
+func (d *Database) DeleteTable(tableName string) error {
+    return nil
+}
+
+func init() {
+    api.RegisterFactory("mydb", func(config map[string]string) (api.Database, error) {
+        return &Database{}, nil
+    })
+}
+```
+
+使用时通过 `NewDatabaseByName` 创建：
+
+```go
+import "github.com/Carry-Rao/goutils/database"
+
+db, _ := database.NewDatabaseByName("mydb", map[string]string{
+    "host": "127.0.0.1",
+})
+```
+
+也可以注册别名：
+
+```go
+api.Register("pg", api.PostgreSQL)
+db, _ := database.NewDatabaseByName("pg", config)
+```

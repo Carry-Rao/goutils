@@ -34,3 +34,13 @@ func NewDatabase(dbType api.DbType, config map[string]string) (api.Database, err
 	}
 	return nil, errors.New(fmt.Sprintf("unknown database type: %d", dbType))
 }
+
+func NewDatabaseByName(name string, config map[string]string) (api.Database, error) {
+	if factory, ok := api.LookupFactory(name); ok {
+		return factory(config)
+	}
+	if dbType, ok := api.Lookup(name); ok {
+		return NewDatabase(dbType, config)
+	}
+	return nil, errors.New("unknown database type: " + name)
+}
