@@ -60,6 +60,7 @@ The database module uses a **struct-driven** design pattern:
 - Each database table maps to a Go struct with `db` tags for field names and constraints
 - `Insert`/`Get`/`Set`/`Delete` all take struct instances as parameters
 - Use field name lists to specify WHERE conditions, avoiding raw SQL
+- `GetTable` automatically creates the table from the struct (skips if already exists), no manual DDL needed
 
 ### Struct Definition Example
 

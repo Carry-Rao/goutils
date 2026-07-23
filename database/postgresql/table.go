@@ -1,18 +1,16 @@
 package postgresql
 
 import (
-	"context"
+	"database/sql"
 	"fmt"
-	"reflect"
 	"strings"
 	"time"
 
 	"github.com/Carry-Rao/goutils/database/api"
-	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 type Table struct {
-	pool      *pgxpool.Pool
+	db        *sql.DB
 	table     string
 	schema    *api.CachedSchema
 	insertQry string
@@ -27,7 +25,7 @@ func (t *Table) Ins(example any, _ time.Duration) error {
 	if len(args) == 0 {
 		return fmt.Errorf("struct has no exported fields")
 	}
-	_, err := t.pool.Exec(context.Background(), t.insertQry, args...)
+	_, err := t.db.Exec(t.insertQry, args...)
 	return err
 }
 
@@ -47,36 +45,38 @@ func (t *Table) Get(example any, whereFields []string, _ time.Duration) ([]any, 
 		query += " WHERE " + whereClause
 	}
 
-	rows, err := t.pool.Query(context.Background(), query, args...)
+	rows, err := t.db.Query(query, args...)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
 
-	cols := rows.FieldDescriptions()
-	if len(cols) == 0 {
-		return nil, nil
+	cols, err := rows.Columns()
+	if err != nil {
+		return nil, err
 	}
 
 	colIndex := make(map[string]int, len(cols))
 	for i, c := range cols {
-		colIndex[string(c.Name)] = i
+		colIndex[c] = i
 	}
 
 	var results []any
 	for rows.Next() {
-		values, err := rows.Values()
-		if err != nil {
-			return nil, err
-		}
 		result := api.NewStruct(t.schema.Type)
+		scanPtrs := make([]any, len(cols))
+		tmp := make([]*interface{}, len(cols))
+		for i := range tmp {
+			tmp[i] = new(interface{})
+			scanPtrs[i] = tmp[i]
+		}
 		for _, field := range t.schema.Fields {
-			if idx, ok := colIndex[field.ColumnName]; ok && idx < len(values) {
-				v := values[idx]
-				if v != nil {
-					result.Field(field.Index).Set(reflect.ValueOf(v))
-				}
+			if idx, ok := colIndex[field.ColumnName]; ok {
+				scanPtrs[idx] = result.Field(field.Index).Addr().Interface()
 			}
+		}
+		if err := rows.Scan(scanPtrs...); err != nil {
+			return nil, err
 		}
 		results = append(results, result.Addr().Interface())
 	}
@@ -119,7 +119,7 @@ func (t *Table) Set(example any, whereFields []string, _ time.Duration) error {
 	if whereClause != "" {
 		query += " WHERE " + whereClause
 	}
-	_, err = t.pool.Exec(context.Background(), query, args...)
+	_, err = t.db.Exec(query, args...)
 	return err
 }
 
@@ -138,7 +138,7 @@ func (t *Table) Del(example any, whereFields []string, _ time.Duration) error {
 	if whereClause != "" {
 		query += " WHERE " + whereClause
 	}
-	_, err = t.pool.Exec(context.Background(), query, args...)
+	_, err = t.db.Exec(query, args...)
 	return err
 }
 

@@ -3,7 +3,7 @@ package api
 type DbType int
 
 const (
-	MySQL      DbType = iota
+	MySQL DbType = iota
 	PostgreSQL
 	SQLite
 	Redis

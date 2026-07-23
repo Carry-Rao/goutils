@@ -60,6 +60,7 @@ users, _ := table.Get(User{}, []string{"name"}, 0) // 返回 []User，不是 []a
 - 每个数据库表对应一个 Go 结构体，通过 `db` tag 标记字段名和约束
 - `Insert`/`Get`/`Set`/`Delete` 均以结构体实例作为参数
 - 使用字段名列表指定 WHERE 条件，避免手写 SQL
+- `GetTable` 自动根据结构体创建表（如表已存在则跳过），无需手动建表
 
 ### 结构体定义示例
 

@@ -1,15 +1,14 @@
 package postgresql
 
 import (
-	"context"
+	"database/sql"
 	"fmt"
-	"time"
 
-	"github.com/jackc/pgx/v5/pgxpool"
+	_ "github.com/jackc/pgx/v5/stdlib"
 )
 
 type Database struct {
-	pool *pgxpool.Pool
+	db *sql.DB
 }
 
 func NewDatabase(config map[string]string) (*Database, error) {
@@ -24,21 +23,19 @@ func NewDatabase(config map[string]string) (*Database, error) {
 		user, password, host, port, dbname,
 	)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-
-	pool, err := pgxpool.New(ctx, connStr)
+	db, err := sql.Open("pgx", connStr)
 	if err != nil {
-		return nil, fmt.Errorf("create pool: %w", err)
+		return nil, fmt.Errorf("open: %w", err)
 	}
 
-	if err := pool.Ping(ctx); err != nil {
+	if err := db.Ping(); err != nil {
+		db.Close()
 		return nil, fmt.Errorf("ping: %w", err)
 	}
 
-	return &Database{pool: pool}, nil
+	return &Database{db: db}, nil
 }
 
 func (p *Database) Close() {
-	p.pool.Close()
+	p.db.Close()
 }
