@@ -43,7 +43,7 @@ db.DeleteTable("users")
 Use `typed.TypedTable[T]` for compile-time type safety:
 
 ```go
-import "github.com/Carry-Rao/goutils/database/typed"
+import "github.com/Carry-Rao/goutils/database/api/typed"
 
 rawTable, _ := db.GetTable("users", &User{})
 table := typed.NewTable[User](rawTable)

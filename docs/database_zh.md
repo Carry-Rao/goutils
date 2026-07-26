@@ -43,7 +43,7 @@ db.DeleteTable("users")
 使用 `typed.TypedTable[T]` 获得编译期类型检查：
 
 ```go
-import "github.com/Carry-Rao/goutils/database/typed"
+import "github.com/Carry-Rao/goutils/database/api/typed"
 
 rawTable, _ := db.GetTable("users", &User{})
 table := typed.NewTable[User](rawTable)
