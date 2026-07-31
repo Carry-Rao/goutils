@@ -43,3 +43,15 @@ We provide [English](https://github.com/Carry-Rao/goutils/blob/master/README.md)
 - **级别过滤**：通过设置日志级别，灵活控制日志输出粒度
 
 [完整接口文档](https://github.com/Carry-Rao/goutils/blob/master/docs/log_zh.md)
+
+## HTTP 模块
+
+该模块提供了基于前缀树（radix tree）的**高性能 HTTP 路由器**，核心特性包括：
+
+- **类型化路径变量**：支持 `:int` 与 `:string` 路径变量，`int` 优先匹配
+- **方法路由**：支持全部 HTTP 方法快捷注册，并提供 `All` 多方法注册
+- **中间件**：支持链式中间件，可终止请求
+- **CORS 支持**：支持按路径模式配置跨域策略，自动响应预检请求
+- **自定义错误处理**：可替换默认的 404 / 400 响应处理器
+
+[完整接口文档](https://github.com/Carry-Rao/goutils/blob/master/docs/http_zh.md)

@@ -43,3 +43,15 @@ This module provides a **unified logging capability**, supporting multi-level lo
 - **Level Filtering**: Control log output granularity by setting the log level
 
 [Complete API Documentation](https://github.com/Carry-Rao/goutils/blob/master/docs/log_en.md)
+
+## HTTP Module
+
+This module provides a **high-performance HTTP router** based on a prefix tree. Its core features include:
+
+- **Typed Path Variables**: Supports `:int` and `:string` path variables, with `int` matching first
+- **Method Routing**: Quick registration for all HTTP methods, plus `All` for multi-method routing
+- **Middleware**: Chainable middleware that can terminate requests
+- **CORS Support**: Per-pattern CORS configuration with automatic preflight responses
+- **Custom Error Handling**: Replaceable 404 / 400 response handlers
+
+[Complete API Documentation](https://github.com/Carry-Rao/goutils/blob/master/docs/http_en.md)
