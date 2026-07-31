@@ -37,70 +37,81 @@ Highlights:
 
 ## Log Module
 
-Per-entry writes (buffer not full; data stays in the in-memory buffer, no disk I/O):
+Per-entry writes, compared against the standard library `log` package:
 
 | Benchmark | ns/op | B/op | allocs/op |
 |-----------|-------|------|-----------|
-| `Debug` | 383.7 | 24 B | 1 |
-| `Info` | 408.3 | 24 B | 1 |
-| `Error` | 396.1 | 24 B | 1 |
-| `InfoColor` | 436.3 | 72 B | 2 |
-| `InfoDiscard` | 370.2 | 24 B | 1 |
+| `log.Debug` | 379.4 | 24 B | 1 |
+| `log.Info` | 370.2 | 24 B | 1 |
+| `log.Error` | 366.2 | 24 B | 1 |
+| `log.InfoColor` | 425.3 | 72 B | 2 |
+| `log.InfoDiscard` | 360.6 | 24 B | 1 |
+| `log.StdlibLog` (stdlib) | 1693 | 0 B | 0 |
 
 Highlights:
 
-- Single entry write at ~**380–440 ns/op**; the buffer mechanism avoids frequent disk I/O
-- Color output (ANSI escape codes) adds ~30 ns and one extra allocation
+- Single entry write at ~**360–430 ns/op**, roughly **4x faster** than stdlib `log` (~1.7 µs/op)
+- This module buffers in memory and does not flush until the buffer is full; stdlib `log.Print` writes to the file on every call (OS-buffered), hence the higher cost and zero allocations
+- Color output (ANSI escape codes) adds ~50 ns and one extra allocation
 - All log levels perform similarly; the level-filter logic itself is negligible
 
 ## Database - Memory (in-memory cache)
 
-Hash-map implementation backed by `sync.RWMutex`:
+Hash-map implementation backed by `sync.RWMutex`, compared against a raw `map` baseline:
 
 | Benchmark | ns/op | B/op | allocs/op |
 |-----------|-------|------|-----------|
-| `Ins` | 1709 | 279 B | 5 |
-| `Get` (hit) | 807.3 | 47 B | 2 |
-| `Set` | 966.6 | 112 B | 4 |
-| `Del` | 753.9 | 48 B | 2 |
-| `GetMiss` | 646.2 | 48 B | 3 |
+| `Ins` | 1395 | 279 B | 5 |
+| `StdlibMap_Ins` (raw map) | 1076 | 223 B | 3 |
+| `Get` (hit) | 781.7 | 48 B | 2 |
+| `StdlibMap_Get` (raw map) | 451.5 | 23 B | 1 |
+| `Set` | 985.8 | 112 B | 4 |
+| `StdlibMap_Set` (raw map) | 622.0 | 55 B | 2 |
+| `Del` | 708.6 | 48 B | 2 |
+| `StdlibMap_Del` (raw map) | 523.2 | 23 B | 1 |
+| `GetMiss` | 656.1 | 48 B | 3 |
 
 Highlights:
 
-- Reads at ~**0.8 µs/op**, writes at ~**1–1.7 µs/op**
-- Main overhead comes from interface-layer reflection (struct field parsing) and `fmt.Sprintf` key concatenation
+- Reads at ~**0.8 µs/op**, writes at ~**1–1.4 µs/op**
+- Roughly **1.3–1.7x slower** than a raw map; overhead comes from interface-layer reflection (struct field parsing), `fmt.Sprintf` key concatenation, and expiration checks
+- In exchange you get the unified Database/Table interface and TTL expiration support
 
 ## Database - Bloom Filter
 
-1024-bit bloom filter with double FNV hashing for fast existence checks:
+1024-bit bloom filter with double FNV hashing for fast existence checks, compared against raw `map` membership:
 
 | Benchmark | ns/op | B/op | allocs/op |
 |-----------|-------|------|-----------|
-| `Ins` | 1218 | 223 B | 4 |
-| `GetHit` | 745.5 | 56 B | 3 |
-| `GetMiss` | 681.4 | 40 B | 3 |
-| `Contains` | 39.02 | 0 B | 0 |
-| `Add` | 99.88 | 0 B | 0 |
+| `Ins` | 1453 | 223 B | 4 |
+| `GetHit` | 832.2 | 56 B | 3 |
+| `GetMiss` | 683.1 | 40 B | 3 |
+| `Contains` | 37.43 | 0 B | 0 |
+| `StdlibMap_Contains` (raw map) | 28.57 | 0 B | 0 |
+| `Add` | 75.90 | 0 B | 0 |
 
 Highlights:
 
-- Pure hashing check `Contains` at only ~**39 ns/op** with zero allocations, ideal for high-frequency filtering
-- The full Table interface path (reflection + locks) runs at ~0.7–1.2 µs/op
+- Pure hashing check `Contains` at ~**37 ns/op** with zero allocations, same order of magnitude as raw map membership (~29 ns)
+- The bloom filter's advantage is **fixed memory** (1024 bits) and lookups that do not grow with data size; the trade-off is a false-positive rate. A raw map is faster but memory grows linearly with element count
+- The full Table interface path (reflection + locks) runs at ~0.7–1.5 µs/op
 
 ## Database - Mixture (chained databases)
 
-Bloom → Memory two-layer chain, both using the `Continue` strategy:
+Bloom → Memory two-layer chain, both using the `Continue` strategy, compared against raw `map` reads:
 
 | Benchmark | ns/op | B/op | allocs/op |
 |-----------|-------|------|-----------|
-| `Ins` | 1229 | 223 B | 4 |
-| `GetHit` | 798.0 | 56 B | 4 |
-| `Set` | 759.7 | 55 B | 3 |
-| `Del` | 709.8 | 40 B | 2 |
+| `Ins` | 1302 | 223 B | 4 |
+| `GetHit` | 848.9 | 56 B | 3 |
+| `StdlibMap_Get` (raw map) | 397.4 | 7 B | 0 |
+| `Set` | 849.9 | 55 B | 3 |
+| `Del` | 742.1 | 40 B | 2 |
 
 Highlights:
 
-- When the first layer (Bloom) handles the request successfully, overall overhead matches a single Bloom layer, ~**0.7–1.2 µs/op**
+- When the first layer (Bloom) handles the request successfully, overall overhead matches a single Bloom layer, ~**0.7–1.3 µs/op**
+- ~0.4 µs slower than raw map reads (~0.4 µs), the cost of the multi-layer chain (Bloom existence check + Memory storage) and the unified interface
 - Multi-layer chaining adds almost no overhead for first-layer hits
 
 ## How to Reproduce
