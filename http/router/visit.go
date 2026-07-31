@@ -25,24 +25,6 @@ func isInt(s string) bool {
 	return true
 }
 
-func (p *pathTree) visitPaths(paths []string, ctx []string) (func(http.ResponseWriter, *http.Request, []string), []string) {
-	if len(paths) == 0 {
-		return p.Function, ctx
-	}
-	if p.SubPaths[paths[0]] != nil {
-		return p.SubPaths[paths[0]].visitPaths(paths[1:], ctx)
-	}
-	if isInt(paths[0]) && p.SubVariablesPaths[Int] != nil {
-		ctx = append(ctx, paths[0])
-		return p.SubVariablesPaths[Int].visitPaths(paths[1:], ctx)
-	}
-	if p.SubVariablesPaths[String] != nil {
-		ctx = append(ctx, paths[0])
-		return p.SubVariablesPaths[String].visitPaths(paths[1:], ctx)
-	}
-	return NotFound, nil
-}
-
 func cleanPaths(paths []string) []string {
 	clean := paths[:0]
 	for _, s := range paths {

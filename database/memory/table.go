@@ -2,6 +2,8 @@ package memory
 
 import (
 	"fmt"
+	"reflect"
+	"strconv"
 	"sync"
 	"time"
 
@@ -12,8 +14,32 @@ type Table struct {
 	db        *Database
 	tableName string
 	cacheKey  string
+	keyPrefix string
+	pkField   api.FieldInfo
+	hasPK     bool
 	schema    *api.CachedSchema
 	mu        sync.RWMutex
+}
+
+func (t *Table) buildKey(val reflect.Value) string {
+	fv := val.Field(t.pkField.Index)
+	switch t.pkField.GoKind {
+	case reflect.String:
+		return t.keyPrefix + fv.String()
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+		return t.keyPrefix + strconv.FormatInt(fv.Int(), 10)
+	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Uintptr:
+		return t.keyPrefix + strconv.FormatUint(fv.Uint(), 10)
+	default:
+		return t.keyPrefix + fmt.Sprintf("%v", fv.Interface())
+	}
+}
+
+func newEntry(data any, ttl time.Duration) *entry {
+	if ttl <= 0 {
+		return &entry{data: data}
+	}
+	return &entry{data: data, expires: time.Now().Add(ttl)}
 }
 
 func (t *Table) Ins(example any, ttl time.Duration) error {
@@ -22,21 +48,15 @@ func (t *Table) Ins(example any, ttl time.Duration) error {
 		return fmt.Errorf("example must be struct or pointer to struct")
 	}
 
-	f, found := t.schema.FieldMap[t.cacheKey]
-	if !found {
+	if !t.hasPK {
 		return fmt.Errorf("primary key field %q not found", t.cacheKey)
 	}
-	idVal := val.Field(f.Index).Interface()
-	key := t.tableName + "_" + fmt.Sprintf("%v", idVal)
 
-	entry := &entry{
-		data:    example,
-		expires: time.Now().Add(ttl),
-	}
+	key := t.buildKey(val)
 
 	t.mu.Lock()
 	defer t.mu.Unlock()
-	t.db.data[t.tableName][key] = entry
+	t.db.data[t.tableName][key] = newEntry(example, ttl)
 	return nil
 }
 
@@ -46,12 +66,11 @@ func (t *Table) Get(example any, whereFields []string, _ time.Duration) ([]any, 
 		return nil, fmt.Errorf("example must be struct or pointer to struct")
 	}
 
-	f, found := t.schema.FieldMap[t.cacheKey]
-	if !found {
+	if !t.hasPK {
 		return nil, fmt.Errorf("primary key field %q not found", t.cacheKey)
 	}
-	idVal := val.Field(f.Index).Interface()
-	key := t.tableName + "_" + fmt.Sprintf("%v", idVal)
+
+	key := t.buildKey(val)
 
 	t.mu.RLock()
 	defer t.mu.RUnlock()
@@ -80,21 +99,15 @@ func (t *Table) Set(example any, whereFields []string, ttl time.Duration) error 
 		return fmt.Errorf("example must be struct or pointer to struct")
 	}
 
-	f, found := t.schema.FieldMap[t.cacheKey]
-	if !found {
+	if !t.hasPK {
 		return fmt.Errorf("primary key field %q not found", t.cacheKey)
 	}
-	idVal := val.Field(f.Index).Interface()
-	key := t.tableName + "_" + fmt.Sprintf("%v", idVal)
+
+	key := t.buildKey(val)
 
 	t.mu.Lock()
 	defer t.mu.Unlock()
-
-	entry := &entry{
-		data:    example,
-		expires: time.Now().Add(ttl),
-	}
-	t.db.data[t.tableName][key] = entry
+	t.db.data[t.tableName][key] = newEntry(example, ttl)
 	return nil
 }
 
@@ -104,12 +117,11 @@ func (t *Table) Del(example any, whereFields []string, _ time.Duration) error {
 		return fmt.Errorf("example must be struct or pointer to struct")
 	}
 
-	f, found := t.schema.FieldMap[t.cacheKey]
-	if !found {
+	if !t.hasPK {
 		return fmt.Errorf("primary key field %q not found", t.cacheKey)
 	}
-	idVal := val.Field(f.Index).Interface()
-	key := t.tableName + "_" + fmt.Sprintf("%v", idVal)
+
+	key := t.buildKey(val)
 
 	t.mu.Lock()
 	defer t.mu.Unlock()

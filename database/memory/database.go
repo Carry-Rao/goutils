@@ -32,10 +32,15 @@ func (m *Database) GetTable(tableName string, example any) (api.Table, error) {
 	}
 
 	schema := api.GetOrBuildSchema(api.TypeOf(example))
+	cacheKey := m.cache[tableName]
+	pkField, hasPK := schema.FieldMap[cacheKey]
 	return &Table{
 		db:        m,
 		tableName: tableName,
-		cacheKey:  m.cache[tableName],
+		cacheKey:  cacheKey,
+		keyPrefix: tableName + "_",
+		pkField:   pkField,
+		hasPK:     hasPK,
 		schema:    schema,
 	}, nil
 }
