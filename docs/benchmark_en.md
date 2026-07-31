@@ -59,16 +59,16 @@ Hash-map implementation backed by `sync.RWMutex`, compared against a raw `map` b
 
 | stdlib | benchmark | ns/op | B/op | allocs/op |
 |--------|-----------|-------|------|-----------|
-| `StdlibMap_Ins` | `Ins` | 1076 / 1395 | 223 / 279 | 3 / 5 |
-| `StdlibMap_Get` | `Get` | 451.5 / 781.7 | 23 / 48 | 1 / 2 |
-| `StdlibMap_Set` | `Set` | 622.0 / 985.8 | 55 / 112 | 2 / 4 |
-| `StdlibMap_Del` | `Del` | 523.2 / 708.6 | 23 / 48 | 1 / 2 |
-| — | `GetMiss` | — / 656.1 | — / 48 | — / 3 |
+| `StdlibMap_Ins` | `Ins` | 1153 / 1335 | 223 / 270 | 3 / 4 |
+| `StdlibMap_Get` | `Get` | 586.2 / 666.0 | 23 / 71 | 1 / 3 |
+| `StdlibMap_Set` | `Set` | 593.2 / 706.6 | 55 / 103 | 2 / 3 |
+| `StdlibMap_Del` | `Del` | 571.6 / 693.6 | 23 / 55 | 1 / 2 |
+| — | `GetMiss` | — / 494.5 | — / 56 | — / 3 |
 
 Highlights:
 
-- Reads at ~**0.8 µs/op**, writes at ~**1–1.4 µs/op**
-- Roughly **1.3–1.7x slower** than a raw map; overhead comes from interface-layer reflection (struct field parsing), `fmt.Sprintf` key concatenation, and expiration checks
+- Reads at ~**0.7 µs/op**, writes at ~**0.7–1.3 µs/op**
+- Roughly **1.1–1.2x slower** than a raw map; overhead comes from interface-layer reflection (struct field parsing), key concatenation, and expiration checks
 - In exchange you get the unified Database/Table interface and TTL expiration support
 
 ### Bloom Filter
