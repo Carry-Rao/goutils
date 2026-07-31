@@ -1,6 +1,7 @@
 package bloom
 
 import (
+	"strconv"
 	"testing"
 
 	"github.com/Carry-Rao/goutils/database/api"
@@ -72,3 +73,17 @@ func BenchmarkAdd(b *testing.B) {
 		table.add("items_" + string(rune(i)))
 	}
 }
+
+// ============ Standard library map baseline ============
+
+func BenchmarkStdlibMapContains(b *testing.B) {
+	m := make(map[string]struct{}, b.N)
+	for i := 0; i < b.N; i++ {
+		m["items_"+strconv.Itoa(i)] = struct{}{}
+	}
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_, _ = m["items_1"]
+	}
+}
+

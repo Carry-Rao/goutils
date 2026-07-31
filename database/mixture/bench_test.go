@@ -1,6 +1,8 @@
 package mixture
 
 import (
+	"strconv"
+	"sync"
 	"testing"
 
 	"github.com/Carry-Rao/goutils/database/api"
@@ -73,3 +75,24 @@ func BenchmarkDel(b *testing.B) {
 		_ = table.Del(&benchRec{ID: i}, nil, 0)
 	}
 }
+
+// ============ Standard library map baseline ============
+
+func BenchmarkStdlibMapGet(b *testing.B) {
+	m := make(map[string]any, b.N)
+	var mu sync.RWMutex
+	for i := 0; i < b.N; i++ {
+		m[benchKey(i)] = &benchRec{ID: i, Name: "n"}
+	}
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		mu.RLock()
+		_ = m[benchKey(i)]
+		mu.RUnlock()
+	}
+}
+
+func benchKey(i int) string {
+	return "recs_" + strconv.Itoa(i)
+}
+

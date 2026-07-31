@@ -1,6 +1,8 @@
 package memory
 
 import (
+	"fmt"
+	"sync"
 	"testing"
 	"time"
 
@@ -71,6 +73,61 @@ func BenchmarkGetMiss(b *testing.B) {
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		_, _ = table.Get(&benchUser{ID: b.N + i + 1}, nil, 0)
+	}
+}
+
+// ============ Standard library map baseline ============
+
+func BenchmarkStdlibMapIns(b *testing.B) {
+	m := make(map[string]any)
+	var mu sync.RWMutex
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		mu.Lock()
+		m[fmt.Sprintf("users_%d", i)] = &benchUser{ID: i, Name: "user", Age: 20}
+		mu.Unlock()
+	}
+}
+
+func BenchmarkStdlibMapGet(b *testing.B) {
+	m := make(map[string]any, b.N)
+	var mu sync.RWMutex
+	for i := 0; i < b.N; i++ {
+		m[fmt.Sprintf("users_%d", i)] = &benchUser{ID: i, Name: "user", Age: 20}
+	}
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		mu.RLock()
+		_ = m[fmt.Sprintf("users_%d", i)]
+		mu.RUnlock()
+	}
+}
+
+func BenchmarkStdlibMapSet(b *testing.B) {
+	m := make(map[string]any, b.N)
+	var mu sync.RWMutex
+	for i := 0; i < b.N; i++ {
+		m[fmt.Sprintf("users_%d", i)] = &benchUser{ID: i, Name: "user", Age: 20}
+	}
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		mu.Lock()
+		m[fmt.Sprintf("users_%d", i)] = &benchUser{ID: i, Name: "updated", Age: 21}
+		mu.Unlock()
+	}
+}
+
+func BenchmarkStdlibMapDel(b *testing.B) {
+	m := make(map[string]any, b.N)
+	var mu sync.RWMutex
+	for i := 0; i < b.N; i++ {
+		m[fmt.Sprintf("users_%d", i)] = &benchUser{ID: i, Name: "user", Age: 20}
+	}
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		mu.Lock()
+		delete(m, fmt.Sprintf("users_%d", i))
+		mu.Unlock()
 	}
 }
 

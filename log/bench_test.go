@@ -2,6 +2,7 @@ package log
 
 import (
 	"io"
+	"log"
 	"os"
 	"testing"
 )
@@ -64,6 +65,22 @@ func BenchmarkInfoDiscard(b *testing.B) {
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		l.Info("benchmark info message")
+	}
+}
+
+func BenchmarkStdlibLog(b *testing.B) {
+	f, err := os.CreateTemp("", "goutils-stdlib-log-*")
+	if err != nil {
+		b.Fatal(err)
+	}
+	b.Cleanup(func() {
+		f.Close()
+		os.Remove(f.Name())
+	})
+	l := log.New(f, "", log.LstdFlags)
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		l.Print("benchmark info message")
 	}
 }
 
