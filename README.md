@@ -55,3 +55,9 @@ This module provides a **high-performance HTTP router** based on a prefix tree. 
 - **Custom Error Handling**: Replaceable 404 / 400 response handlers
 
 [Complete API Documentation](https://github.com/Carry-Rao/goutils/blob/master/docs/http_en.md)
+
+## Performance Benchmarks
+
+We provide benchmark results for the router, log, and database (memory / bloom / mixture) modules, including latency, memory, and allocation data:
+
+[View Performance Benchmarks](https://github.com/Carry-Rao/goutils/blob/master/docs/benchmark_en.md)

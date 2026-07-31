@@ -55,3 +55,9 @@ We provide [English](https://github.com/Carry-Rao/goutils/blob/master/README.md)
 - **自定义错误处理**：可替换默认的 404 / 400 响应处理器
 
 [完整接口文档](https://github.com/Carry-Rao/goutils/blob/master/docs/http_zh.md)
+
+## 性能基准测试
+
+我们提供了路由、日志、数据库（memory / bloom / mixture）等模块的基准测试结果，涵盖耗时、内存与分配数据：
+
+[查看性能基准测试](https://github.com/Carry-Rao/goutils/blob/master/docs/benchmark_zh.md)
