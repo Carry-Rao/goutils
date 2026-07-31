@@ -4,29 +4,26 @@
 
 > 基准测试运行环境：Linux / amd64，CPU：Intel Core i7-6600U @ 2.60GHz，Go 1.24。
 > 测试命令：`go test -bench=. -benchmem -benchtime=1000000x -run=^$ ./<模块>/`
+>
+> 对照表格中，指标列数值格式为 `标准库 / 本模块`。
 
 ## HTTP 路由模块
 
 与标准库 `net/http.ServeMux` 对比，路由器基于前缀树实现，静态路径与多路由场景下均优于标准库：
 
-| 基准测试 | 耗时/op | 内存/op | 分配/op |
-|----------|---------|---------|---------|
-| `ServeMux_Static` | 133.9 ns | 0 B | 0 |
-| `Router_Static` | 52.45 ns | 0 B | 0 |
-| `ServeMux_Var` | 289.8 ns | 16 B | 1 |
-| `Router_StringVar` | 143.6 ns | 16 B | 1 |
-| `Router_IntVar` | 147.7 ns | 16 B | 1 |
-| `ServeMux_Deep` | 446.9 ns | 0 B | 0 |
-| `Router_Deep` | 290.5 ns | 0 B | 0 |
-| `ServeMux_NotFound` | 4026 ns | 208 B | 12 |
-| `Router_NotFound` | 117.2 ns | 16 B | 1 |
-| `ServeMux_ManyRoutes` | 141.6 ns | 0 B | 0 |
-| `Router_ManyRoutes` | 59.27 ns | 0 B | 0 |
-| `Router_NoMiddleware` | 56.74 ns | 0 B | 0 |
-| `Router_TwoMiddleware` | 69.17 ns | 0 B | 0 |
-| `Router_CORS` | 349.0 ns | 16 B | 1 |
-| `Router_CORSPreflight` | 269.9 ns | 16 B | 1 |
-| `Router_MixedVar` | 465.9 ns | 112 B | 3 |
+| stdlib | benchmark | ns/op | B/op | allocs/op |
+|--------|-----------|-------|------|-----------|
+| `ServeMux_Static` | `Router_Static` | 133.9 / 52.45 | 0 / 0 | 0 / 0 |
+| `ServeMux_Var` | `Router_StringVar` | 289.8 / 143.6 | 16 / 16 | 1 / 1 |
+| `ServeMux_Var` | `Router_IntVar` | 289.8 / 147.7 | 16 / 16 | 1 / 1 |
+| `ServeMux_Deep` | `Router_Deep` | 446.9 / 290.5 | 0 / 0 | 0 / 0 |
+| `ServeMux_NotFound` | `Router_NotFound` | 4026 / 117.2 | 208 / 16 | 12 / 1 |
+| `ServeMux_ManyRoutes` | `Router_ManyRoutes` | 141.6 / 59.27 | 0 / 0 | 0 / 0 |
+| — | `Router_NoMiddleware` | — / 56.74 | — / 0 | — / 0 |
+| — | `Router_TwoMiddleware` | — / 69.17 | — / 0 | — / 0 |
+| — | `Router_CORS` | — / 349.0 | — / 16 | — / 1 |
+| — | `Router_CORSPreflight` | — / 269.9 | — / 16 | — / 1 |
+| — | `Router_MixedVar` | — / 465.9 | — / 112 | — / 3 |
 
 要点：
 
@@ -39,14 +36,13 @@
 
 单条日志写入，与标准库 `log` 包对比：
 
-| 基准测试 | 耗时/op | 内存/op | 分配/op |
-|----------|---------|---------|---------|
-| `log.Debug` | 379.4 ns | 24 B | 1 |
-| `log.Info` | 370.2 ns | 24 B | 1 |
-| `log.Error` | 366.2 ns | 24 B | 1 |
-| `log.InfoColor` | 425.3 ns | 72 B | 2 |
-| `log.InfoDiscard` | 360.6 ns | 24 B | 1 |
-| `log.StdlibLog`（标准库） | 1693 ns | 0 B | 0 |
+| stdlib | benchmark | ns/op | B/op | allocs/op |
+|--------|-----------|-------|------|-----------|
+| `log.StdlibLog` | `log.Debug` | 1693 / 379.4 | 0 / 24 | 0 / 1 |
+| `log.StdlibLog` | `log.Info` | 1693 / 370.2 | 0 / 24 | 0 / 1 |
+| `log.StdlibLog` | `log.Error` | 1693 / 366.2 | 0 / 24 | 0 / 1 |
+| `log.StdlibLog` | `log.InfoColor` | 1693 / 425.3 | 0 / 72 | 0 / 2 |
+| `log.StdlibLog` | `log.InfoDiscard` | 1693 / 360.6 | 0 / 24 | 0 / 1 |
 
 要点：
 
@@ -55,21 +51,19 @@
 - 颜色输出（ANSI 转义码）额外带来约 50 ns 与 1 次分配的开销
 - 各日志级别性能接近，级别过滤逻辑本身开销可忽略
 
-## 数据库 - Memory（内存缓存）
+## 数据库模块
+
+### Memory（内存缓存）
 
 基于 `sync.RWMutex` 的哈希表实现，与原生 `map` 基线对比：
 
-| 基准测试 | 耗时/op | 内存/op | 分配/op |
-|----------|---------|---------|---------|
-| `Ins` | 1395 ns | 279 B | 5 |
-| `StdlibMap_Ins`（原生 map） | 1076 ns | 223 B | 3 |
-| `Get`（命中） | 781.7 ns | 48 B | 2 |
-| `StdlibMap_Get`（原生 map） | 451.5 ns | 23 B | 1 |
-| `Set` | 985.8 ns | 112 B | 4 |
-| `StdlibMap_Set`（原生 map） | 622.0 ns | 55 B | 2 |
-| `Del` | 708.6 ns | 48 B | 2 |
-| `StdlibMap_Del`（原生 map） | 523.2 ns | 23 B | 1 |
-| `GetMiss`（未命中） | 656.1 ns | 48 B | 3 |
+| stdlib | benchmark | ns/op | B/op | allocs/op |
+|--------|-----------|-------|------|-----------|
+| `StdlibMap_Ins` | `Ins` | 1076 / 1395 | 223 / 279 | 3 / 5 |
+| `StdlibMap_Get` | `Get` | 451.5 / 781.7 | 23 / 48 | 1 / 2 |
+| `StdlibMap_Set` | `Set` | 622.0 / 985.8 | 55 / 112 | 2 / 4 |
+| `StdlibMap_Del` | `Del` | 523.2 / 708.6 | 23 / 48 | 1 / 2 |
+| — | `GetMiss` | — / 656.1 | — / 48 | — / 3 |
 
 要点：
 
@@ -77,18 +71,17 @@
 - 相比原生 map 慢约 **1.3~1.7 倍**，主要开销来自接口层的反射（结构体字段解析）与 `fmt.Sprintf` 拼接主键、过期检查等封装能力
 - 换取的是统一 Database/Table 接口与 TTL 过期管理等附加能力
 
-## 数据库 - Bloom（布隆过滤器）
+### Bloom（布隆过滤器）
 
 基于 1024 位布隆过滤器 + FNV 双哈希，用于快速判存，与原生 `map` 判存对比：
 
-| 基准测试 | 耗时/op | 内存/op | 分配/op |
-|----------|---------|---------|---------|
-| `Ins` | 1453 ns | 223 B | 4 |
-| `GetHit`（命中） | 832.2 ns | 56 B | 3 |
-| `GetMiss`（未命中） | 683.1 ns | 40 B | 3 |
-| `Contains` | 37.43 ns | 0 B | 0 |
-| `StdlibMap_Contains`（原生 map 判存） | 28.57 ns | 0 B | 0 |
-| `Add` | 75.90 ns | 0 B | 0 |
+| stdlib | benchmark | ns/op | B/op | allocs/op |
+|--------|-----------|-------|------|-----------|
+| — | `Ins` | — / 1453 | — / 223 | — / 4 |
+| — | `GetHit` | — / 832.2 | — / 56 | — / 3 |
+| — | `GetMiss` | — / 683.1 | — / 40 | — / 3 |
+| `StdlibMap_Contains` | `Contains` | 28.57 / 37.43 | 0 / 0 | 0 / 0 |
+| — | `Add` | — / 75.90 | — / 0 | — / 0 |
 
 要点：
 
@@ -96,17 +89,16 @@
 - 布隆过滤器优势在于**固定内存**（1024 位）与判存不随数据量增长，劣势是有误判率；原生 map 判存更快但内存随元素数线性增长
 - 走完整 Table 接口（含反射与锁）时约 0.7~1.5 µs/op
 
-## 数据库 - Mixture（融合链路）
+### Mixture（融合链路）
 
 组合 Bloom → Memory 两层（均使用 `Continue` 策略）的基准，与原生 `map` 读取对比：
 
-| 基准测试 | 耗时/op | 内存/op | 分配/op |
-|----------|---------|---------|---------|
-| `Ins` | 1302 ns | 223 B | 4 |
-| `GetHit`（命中） | 848.9 ns | 56 B | 3 |
-| `StdlibMap_Get`（原生 map） | 397.4 ns | 7 B | 0 |
-| `Set` | 849.9 ns | 55 B | 3 |
-| `Del` | 742.1 ns | 40 B | 2 |
+| stdlib | benchmark | ns/op | B/op | allocs/op |
+|--------|-----------|-------|------|-----------|
+| — | `Ins` | — / 1302 | — / 223 | — / 4 |
+| `StdlibMap_Get` | `GetHit` | 397.4 / 848.9 | 7 / 56 | 0 / 3 |
+| — | `Set` | — / 849.9 | — / 55 | — / 3 |
+| — | `Del` | — / 742.1 | — / 40 | — / 2 |
 
 要点：
 

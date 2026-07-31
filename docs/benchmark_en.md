@@ -4,29 +4,26 @@ This page summarizes benchmark results across modules to help you understand eac
 
 > Benchmark environment: Linux / amd64, CPU: Intel Core i7-6600U @ 2.60GHz, Go 1.24.
 > Command: `go test -bench=. -benchmem -benchtime=1000000x -run=^$ ./<module>/`
+>
+> In comparison tables, metric columns use the format `stdlib / this module`.
 
 ## HTTP Router Module
 
 Compared against the standard library `net/http.ServeMux`. The router is built on a prefix tree and outperforms the standard library for both static paths and many-route scenarios:
 
-| Benchmark | ns/op | B/op | allocs/op |
-|-----------|-------|------|-----------|
-| `ServeMux_Static` | 133.9 | 0 B | 0 |
-| `Router_Static` | 52.45 | 0 B | 0 |
-| `ServeMux_Var` | 289.8 | 16 B | 1 |
-| `Router_StringVar` | 143.6 | 16 B | 1 |
-| `Router_IntVar` | 147.7 | 16 B | 1 |
-| `ServeMux_Deep` | 446.9 | 0 B | 0 |
-| `Router_Deep` | 290.5 | 0 B | 0 |
-| `ServeMux_NotFound` | 4026 | 208 B | 12 |
-| `Router_NotFound` | 117.2 | 16 B | 1 |
-| `ServeMux_ManyRoutes` | 141.6 | 0 B | 0 |
-| `Router_ManyRoutes` | 59.27 | 0 B | 0 |
-| `Router_NoMiddleware` | 56.74 | 0 B | 0 |
-| `Router_TwoMiddleware` | 69.17 | 0 B | 0 |
-| `Router_CORS` | 349.0 | 16 B | 1 |
-| `Router_CORSPreflight` | 269.9 | 16 B | 1 |
-| `Router_MixedVar` | 465.9 | 112 B | 3 |
+| stdlib | benchmark | ns/op | B/op | allocs/op |
+|--------|-----------|-------|------|-----------|
+| `ServeMux_Static` | `Router_Static` | 133.9 / 52.45 | 0 / 0 | 0 / 0 |
+| `ServeMux_Var` | `Router_StringVar` | 289.8 / 143.6 | 16 / 16 | 1 / 1 |
+| `ServeMux_Var` | `Router_IntVar` | 289.8 / 147.7 | 16 / 16 | 1 / 1 |
+| `ServeMux_Deep` | `Router_Deep` | 446.9 / 290.5 | 0 / 0 | 0 / 0 |
+| `ServeMux_NotFound` | `Router_NotFound` | 4026 / 117.2 | 208 / 16 | 12 / 1 |
+| `ServeMux_ManyRoutes` | `Router_ManyRoutes` | 141.6 / 59.27 | 0 / 0 | 0 / 0 |
+| — | `Router_NoMiddleware` | — / 56.74 | — / 0 | — / 0 |
+| — | `Router_TwoMiddleware` | — / 69.17 | — / 0 | — / 0 |
+| — | `Router_CORS` | — / 349.0 | — / 16 | — / 1 |
+| — | `Router_CORSPreflight` | — / 269.9 | — / 16 | — / 1 |
+| — | `Router_MixedVar` | — / 465.9 | — / 112 | — / 3 |
 
 Highlights:
 
@@ -39,14 +36,13 @@ Highlights:
 
 Per-entry writes, compared against the standard library `log` package:
 
-| Benchmark | ns/op | B/op | allocs/op |
-|-----------|-------|------|-----------|
-| `log.Debug` | 379.4 | 24 B | 1 |
-| `log.Info` | 370.2 | 24 B | 1 |
-| `log.Error` | 366.2 | 24 B | 1 |
-| `log.InfoColor` | 425.3 | 72 B | 2 |
-| `log.InfoDiscard` | 360.6 | 24 B | 1 |
-| `log.StdlibLog` (stdlib) | 1693 | 0 B | 0 |
+| stdlib | benchmark | ns/op | B/op | allocs/op |
+|--------|-----------|-------|------|-----------|
+| `log.StdlibLog` | `log.Debug` | 1693 / 379.4 | 0 / 24 | 0 / 1 |
+| `log.StdlibLog` | `log.Info` | 1693 / 370.2 | 0 / 24 | 0 / 1 |
+| `log.StdlibLog` | `log.Error` | 1693 / 366.2 | 0 / 24 | 0 / 1 |
+| `log.StdlibLog` | `log.InfoColor` | 1693 / 425.3 | 0 / 72 | 0 / 2 |
+| `log.StdlibLog` | `log.InfoDiscard` | 1693 / 360.6 | 0 / 24 | 0 / 1 |
 
 Highlights:
 
@@ -55,21 +51,19 @@ Highlights:
 - Color output (ANSI escape codes) adds ~50 ns and one extra allocation
 - All log levels perform similarly; the level-filter logic itself is negligible
 
-## Database - Memory (in-memory cache)
+## Database Module
+
+### Memory (in-memory cache)
 
 Hash-map implementation backed by `sync.RWMutex`, compared against a raw `map` baseline:
 
-| Benchmark | ns/op | B/op | allocs/op |
-|-----------|-------|------|-----------|
-| `Ins` | 1395 | 279 B | 5 |
-| `StdlibMap_Ins` (raw map) | 1076 | 223 B | 3 |
-| `Get` (hit) | 781.7 | 48 B | 2 |
-| `StdlibMap_Get` (raw map) | 451.5 | 23 B | 1 |
-| `Set` | 985.8 | 112 B | 4 |
-| `StdlibMap_Set` (raw map) | 622.0 | 55 B | 2 |
-| `Del` | 708.6 | 48 B | 2 |
-| `StdlibMap_Del` (raw map) | 523.2 | 23 B | 1 |
-| `GetMiss` | 656.1 | 48 B | 3 |
+| stdlib | benchmark | ns/op | B/op | allocs/op |
+|--------|-----------|-------|------|-----------|
+| `StdlibMap_Ins` | `Ins` | 1076 / 1395 | 223 / 279 | 3 / 5 |
+| `StdlibMap_Get` | `Get` | 451.5 / 781.7 | 23 / 48 | 1 / 2 |
+| `StdlibMap_Set` | `Set` | 622.0 / 985.8 | 55 / 112 | 2 / 4 |
+| `StdlibMap_Del` | `Del` | 523.2 / 708.6 | 23 / 48 | 1 / 2 |
+| — | `GetMiss` | — / 656.1 | — / 48 | — / 3 |
 
 Highlights:
 
@@ -77,18 +71,17 @@ Highlights:
 - Roughly **1.3–1.7x slower** than a raw map; overhead comes from interface-layer reflection (struct field parsing), `fmt.Sprintf` key concatenation, and expiration checks
 - In exchange you get the unified Database/Table interface and TTL expiration support
 
-## Database - Bloom Filter
+### Bloom Filter
 
 1024-bit bloom filter with double FNV hashing for fast existence checks, compared against raw `map` membership:
 
-| Benchmark | ns/op | B/op | allocs/op |
-|-----------|-------|------|-----------|
-| `Ins` | 1453 | 223 B | 4 |
-| `GetHit` | 832.2 | 56 B | 3 |
-| `GetMiss` | 683.1 | 40 B | 3 |
-| `Contains` | 37.43 | 0 B | 0 |
-| `StdlibMap_Contains` (raw map) | 28.57 | 0 B | 0 |
-| `Add` | 75.90 | 0 B | 0 |
+| stdlib | benchmark | ns/op | B/op | allocs/op |
+|--------|-----------|-------|------|-----------|
+| — | `Ins` | — / 1453 | — / 223 | — / 4 |
+| — | `GetHit` | — / 832.2 | — / 56 | — / 3 |
+| — | `GetMiss` | — / 683.1 | — / 40 | — / 3 |
+| `StdlibMap_Contains` | `Contains` | 28.57 / 37.43 | 0 / 0 | 0 / 0 |
+| — | `Add` | — / 75.90 | — / 0 | — / 0 |
 
 Highlights:
 
@@ -96,17 +89,16 @@ Highlights:
 - The bloom filter's advantage is **fixed memory** (1024 bits) and lookups that do not grow with data size; the trade-off is a false-positive rate. A raw map is faster but memory grows linearly with element count
 - The full Table interface path (reflection + locks) runs at ~0.7–1.5 µs/op
 
-## Database - Mixture (chained databases)
+### Mixture (chained databases)
 
 Bloom → Memory two-layer chain, both using the `Continue` strategy, compared against raw `map` reads:
 
-| Benchmark | ns/op | B/op | allocs/op |
-|-----------|-------|------|-----------|
-| `Ins` | 1302 | 223 B | 4 |
-| `GetHit` | 848.9 | 56 B | 3 |
-| `StdlibMap_Get` (raw map) | 397.4 | 7 B | 0 |
-| `Set` | 849.9 | 55 B | 3 |
-| `Del` | 742.1 | 40 B | 2 |
+| stdlib | benchmark | ns/op | B/op | allocs/op |
+|--------|-----------|-------|------|-----------|
+| — | `Ins` | — / 1302 | — / 223 | — / 4 |
+| `StdlibMap_Get` | `GetHit` | 397.4 / 848.9 | 7 / 56 | 0 / 3 |
+| — | `Set` | — / 849.9 | — / 55 | — / 3 |
+| — | `Del` | — / 742.1 | — / 40 | — / 2 |
 
 Highlights:
 
