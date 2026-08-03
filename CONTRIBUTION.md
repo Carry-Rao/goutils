@@ -99,7 +99,7 @@ This project uses **Go** and follows the [official Go Code Review Comments](http
 
 ## Pull Request Process
 
-1. Fork the repository and create a feature branch from `master`.
+1. Fork the repository and create a feature branch from `master` or `main`.
 2. Make your changes following the code style guidelines above.
 3. Write clear commit messages following the commit message convention.
 4. Ensure all existing tests pass and add tests for new functionality.

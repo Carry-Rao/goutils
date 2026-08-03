@@ -99,7 +99,7 @@ Operation: Merge, Module: database/memory: Merge New Type of database: memory.
 
 ## Pull Request 流程
 
-1. Fork 本仓库，从 `master` 创建功能分支。
+1. Fork 本仓库，从 `master` 或 `main` 创建功能分支。
 2. 按照上述代码风格进行修改。
 3. 提交信息遵循提交信息规范。
 4. 确保所有已有测试通过，并为新功能添加测试。
