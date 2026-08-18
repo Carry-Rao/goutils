@@ -376,3 +376,105 @@ func TestHEAD(t *testing.T) {
 		t.Error("HEAD handler was not called")
 	}
 }
+
+func TestSubBasic(t *testing.T) {
+	r := New()
+	var called bool
+	r.GET("/test", func(w http.ResponseWriter, r *http.Request, params []string) {
+		called = true
+	})
+
+	sub := r.Sub("/api")
+	sub.GET("/users", func(w http.ResponseWriter, r *http.Request, params []string) {
+		called = true
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "/api/users", nil)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	if !called {
+		t.Error("sub route handler was not called")
+	}
+	if w.Code != http.StatusOK {
+		t.Errorf("expected 200, got %d", w.Code)
+	}
+}
+
+func TestSubMiddleware(t *testing.T) {
+	r := New()
+	var order []string
+
+	r.Medium(func(w http.ResponseWriter, r *http.Request, ctx []string) bool {
+		order = append(order, "log")
+		return true
+	})
+
+	sub := r.Sub("/api")
+	sub.Medium(func(w http.ResponseWriter, r *http.Request, ctx []string) bool {
+		order = append(order, "auth")
+		return true
+	})
+
+	sub.GET("/users", func(w http.ResponseWriter, r *http.Request, params []string) {
+		order = append(order, "handler")
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "/api/users", nil)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	expected := []string{"log", "auth", "handler"}
+	if len(order) != len(expected) {
+		t.Fatalf("expected %v, got %v", expected, order)
+	}
+	for i := range order {
+		if order[i] != expected[i] {
+			t.Errorf("position %d: expected %s, got %s", i, expected[i], order[i])
+		}
+	}
+}
+
+func TestSubMiddlewareStop(t *testing.T) {
+	r := New()
+	var called bool
+
+	r.Medium(func(w http.ResponseWriter, r *http.Request, ctx []string) bool {
+		return true
+	})
+
+	sub := r.Sub("/api")
+	sub.Medium(func(w http.ResponseWriter, r *http.Request, ctx []string) bool {
+		return false
+	})
+
+	sub.GET("/users", func(w http.ResponseWriter, r *http.Request, params []string) {
+		called = true
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "/api/users", nil)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	if called {
+		t.Error("handler should not be called when middleware returns false")
+	}
+}
+
+func TestSubVariables(t *testing.T) {
+	r := New()
+	sub := r.Sub("/api")
+	sub.GET("/users/:int", func(w http.ResponseWriter, r *http.Request, params []string) {
+		if len(params) != 1 || params[0] != "123" {
+			t.Errorf("expected [123], got %v", params)
+		}
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "/api/users/123", nil)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("expected 200, got %d", w.Code)
+	}
+}

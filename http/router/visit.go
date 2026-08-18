@@ -35,9 +35,14 @@ func cleanPaths(paths []string) []string {
 	return clean
 }
 
-func (p *pathTree) matchPath(path string) (func(http.ResponseWriter, *http.Request, []string), []string) {
+func (p *pathTree) matchPath(path string, w http.ResponseWriter, r *http.Request) (func(http.ResponseWriter, *http.Request, []string), []string, bool) {
 	if path == "" || path == "/" {
-		return p.Function, nil
+		for _, mw := range p.Middleware {
+			if !mw(w, r, nil) {
+				return nil, nil, false
+			}
+		}
+		return p.Function, nil, true
 	}
 
 	node := p
@@ -45,12 +50,19 @@ func (p *pathTree) matchPath(path string) (func(http.ResponseWriter, *http.Reque
 	i := 0
 	n := len(path)
 
+	// 执行根节点中间件
+	for _, mw := range node.Middleware {
+		if !mw(w, r, ctx) {
+			return nil, nil, false
+		}
+	}
+
 	for i < n {
 		for i < n && path[i] == '/' {
 			i++
 		}
 		if i >= n {
-			return node.Function, ctx
+			return node.Function, ctx, true
 		}
 
 		start := i
@@ -61,28 +73,45 @@ func (p *pathTree) matchPath(path string) (func(http.ResponseWriter, *http.Reque
 
 		if next := node.SubPaths[seg]; next != nil {
 			node = next
+			for _, mw := range node.Middleware {
+				if !mw(w, r, ctx) {
+					return nil, nil, false
+				}
+			}
 			continue
 		}
 		if node.SubVariablesPaths[Int] != nil && isInt(seg) {
 			ctx = append(ctx, seg)
 			node = node.SubVariablesPaths[Int]
+			for _, mw := range node.Middleware {
+				if !mw(w, r, ctx) {
+					return nil, nil, false
+				}
+			}
 			continue
 		}
 		if node.SubVariablesPaths[String] != nil {
 			ctx = append(ctx, seg)
 			node = node.SubVariablesPaths[String]
+			for _, mw := range node.Middleware {
+				if !mw(w, r, ctx) {
+					return nil, nil, false
+				}
+			}
 			continue
 		}
-		return NotFound, nil
+		return NotFound, nil, true
 	}
-	return node.Function, ctx
+	return node.Function, ctx, true
 }
 
-func (p *pathTree) visitPath(path string) (func(http.ResponseWriter, *http.Request, []string), []string) {
-	return p.matchPath(path)
+func (p *pathTree) visitPath(path string, w http.ResponseWriter, r *http.Request) (func(http.ResponseWriter, *http.Request, []string), []string, bool) {
+	return p.matchPath(path, w, r)
 }
 
 func (p *pathTree) Visit(w http.ResponseWriter, r *http.Request) {
-	f, c := p.matchPath(r.URL.Path)
-	f(w, r, c)
+	f, c, ok := p.matchPath(r.URL.Path, w, r)
+	if f != nil && ok {
+		f(w, r, c)
+	}
 }

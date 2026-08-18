@@ -7,6 +7,7 @@ import (
 type pathTree struct {
 	Path              string
 	Function          func(http.ResponseWriter, *http.Request, []string)
+	Middleware        []func(http.ResponseWriter, *http.Request, []string) bool
 	SubPaths          map[string]*pathTree
 	SubVariablesPaths map[Type]*pathTree
 }
@@ -46,4 +47,19 @@ func (p *pathTree) addRoute(paths []string, handler func(http.ResponseWriter, *h
 		}
 		p.SubPaths[seg].addRoute(paths[1:], handler)
 	}
+}
+
+func (p *pathTree) getOrCreatePrefix(paths []string) *pathTree {
+	node := p
+	for _, seg := range paths {
+		if node.SubPaths[seg] == nil {
+			node.SubPaths[seg] = &pathTree{
+				Path:              seg,
+				SubPaths:          make(map[string]*pathTree),
+				SubVariablesPaths: make(map[Type]*pathTree),
+			}
+		}
+		node = node.SubPaths[seg]
+	}
+	return node
 }

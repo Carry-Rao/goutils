@@ -104,6 +104,43 @@ r.GET("/secret", func(w http.ResponseWriter, r *http.Request, params []string) {
 })
 ```
 
+## 子路由
+
+使用 `Sub` 创建子路由，共享父路由的路由树，可独立设置中间件：
+
+```go
+r := router.New()
+
+// 全局日志中间件
+r.Medium(func(w http.ResponseWriter, r *http.Request, params []string) bool {
+    log.Println("request:", r.URL.Path)
+    return true
+})
+
+// 创建 /api 子路由
+api := r.Sub("/api")
+
+// /api 路由特有的鉴权中间件
+api.Medium(func(w http.ResponseWriter, r *http.Request, params []string) bool {
+    // 鉴权逻辑
+    return true
+})
+
+api.GET("/v1/users", func(w http.ResponseWriter, r *http.Request, params []string) {
+    // 请求 /api/v1/users 时执行
+    // 中间件执行顺序：日志 → 鉴权 → handler
+})
+
+// 创建 /static 子路由
+s := r.Sub("/static")
+// 静态文件服务...
+```
+
+请求 `/api/v1/users` 时：
+1. 执行全局日志中间件（父路由）
+2. 执行鉴权中间件（子路由）
+3. 执行 handler
+
 ## CORS 配置
 
 使用 `Option` 创建跨域配置，通过链式调用设置属性，最后调用 `Enable` 生效：

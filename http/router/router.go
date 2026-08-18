@@ -12,14 +12,12 @@ var defaultMethods = []string{
 
 type Router struct {
 	roots       map[string]*pathTree
-	middleware  []func(http.ResponseWriter, *http.Request, []string) bool
 	corsConfigs []*CORSConfig
 }
 
 func New() *Router {
 	return &Router{
 		roots:       make(map[string]*pathTree),
-		middleware:  nil,
 		corsConfigs: nil,
 	}
 }
@@ -83,7 +81,42 @@ func (r *Router) All(pattern string, handler func(http.ResponseWriter, *http.Req
 }
 
 func (r *Router) Medium(mw func(http.ResponseWriter, *http.Request, []string) bool) {
-	r.middleware = append(r.middleware, mw)
+	for _, method := range defaultMethods {
+		root := r.roots[method]
+		if root == nil {
+			root = &pathTree{
+				SubPaths:          make(map[string]*pathTree),
+				SubVariablesPaths: make(map[Type]*pathTree),
+			}
+			r.roots[method] = root
+		}
+		root.Middleware = append(root.Middleware, mw)
+	}
+}
+
+func (r *Router) Sub(prefix string) *Router {
+	sub := &Router{
+		roots: make(map[string]*pathTree),
+	}
+	for _, method := range defaultMethods {
+		root := r.roots[method]
+		if root == nil {
+			root = &pathTree{
+				SubPaths:          make(map[string]*pathTree),
+				SubVariablesPaths: make(map[Type]*pathTree),
+			}
+			r.roots[method] = root
+		}
+		sub.roots[method] = root.getOrCreatePrefix(splitPath(prefix))
+	}
+	return sub
+}
+
+func (r *Router) Static(pattern, root string) {
+	fs := http.FileServer(http.Dir(root))
+	r.GET(pattern, func(w http.ResponseWriter, req *http.Request, _ []string) {
+		fs.ServeHTTP(w, req)
+	})
 }
 
 func (r *Router) Option(pattern string) *CORSConfig {
@@ -158,16 +191,9 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	handler, vars := root.visitPath(req.URL.Path)
-	if handler == nil {
-		NotFound(w, req, nil)
+	handler, vars, ok := root.visitPath(req.URL.Path, w, req)
+	if handler == nil || !ok {
 		return
-	}
-
-	for _, mw := range r.middleware {
-		if !mw(w, req, vars) {
-			return
-		}
 	}
 	handler(w, req, vars)
 }
