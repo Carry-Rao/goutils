@@ -131,7 +131,7 @@ type User struct {
 |------------|----------|------|
 | `redis` | `addr`, `password` | Redis 连接地址和密码（模拟表结构） |
 | `memory` | 无需配置 | 内存存储，支持 TTL 自动过期 |
-| `bloom` | 无需配置 | 布隆过滤器，用于快速判存 |
+| `bloom` | 无需配置 | 布隆过滤器，用于快速判存，基于 atomic 无锁实现 |
 
 > 缓存模拟数据库将缓存组件包装为标准 Database/Table 接口，`Create` 时需在 Config 中指定一个 `PrimaryKey` 字段作为数据标识。
 
