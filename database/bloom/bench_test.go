@@ -60,9 +60,10 @@ func BenchmarkGetMiss(b *testing.B) {
 func BenchmarkContains(b *testing.B) {
 	table := benchBloom(b)
 	key := "items_1"
+	h1, h2 := table.hashPair(key)
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		table.contains(key)
+		table.bf.Contains(h1, h2)
 	}
 }
 
@@ -70,7 +71,8 @@ func BenchmarkAdd(b *testing.B) {
 	table := benchBloom(b)
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		table.add("items_" + string(rune(i)))
+		h1, h2 := table.hashPair("items_" + strconv.Itoa(i))
+		table.bf.Add(h1, h2)
 	}
 }
 
