@@ -12,37 +12,34 @@ func (b *Database) Create(tableName string, config map[string]api.Config) error 
 	b.mu.Lock()
 	defer b.mu.Unlock()
 
-	if _, ok := b.data[tableName]; !ok {
-		b.data[tableName] = make(map[string]any)
-	}
-	if _, ok := b.bits[tableName]; !ok {
-		b.bits[tableName] = make([]bool, 1024)
+	if _, ok := b.tables[tableName]; !ok {
+		b.tables[tableName] = &tableData{
+			data: make(map[string]any),
+		}
 	}
 
-	field := ""
 	for k, v := range config {
 		if v.PrimaryKey {
-			field = k
+			b.tables[tableName].cacheKey = k
 			break
 		}
 	}
-	b.cacheKey[tableName] = field
 	return nil
 }
 
 func (b *Database) GetTable(tableName string, example any) (api.Table, error) {
 	b.mu.RLock()
-	defer b.mu.RUnlock()
+	td, ok := b.tables[tableName]
+	b.mu.RUnlock()
 
-	if _, ok := b.data[tableName]; !ok {
+	if !ok {
 		return nil, nil
 	}
 
 	schema := api.GetOrBuildSchema(api.TypeOf(example))
 	return &Table{
-		db:        b,
+		td:        td,
 		tableName: tableName,
-		cacheKey:  b.cacheKey[tableName],
 		schema:    schema,
 	}, nil
 }
@@ -50,8 +47,6 @@ func (b *Database) GetTable(tableName string, example any) (api.Table, error) {
 func (b *Database) DeleteTable(tableName string) error {
 	b.mu.Lock()
 	defer b.mu.Unlock()
-	delete(b.data, tableName)
-	delete(b.bits, tableName)
-	delete(b.cacheKey, tableName)
+	delete(b.tables, tableName)
 	return nil
 }

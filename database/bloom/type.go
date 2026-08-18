@@ -1,20 +1,20 @@
 package bloom
 
-import (
-	"sync"
-)
+import "sync"
+
+type tableData struct {
+	data     map[string]any
+	cacheKey string
+	mu       sync.RWMutex
+}
 
 type Database struct {
-	data     map[string]map[string]any
-	bits     map[string][]bool
-	cacheKey map[string]string
-	mu       sync.RWMutex
+	tables map[string]*tableData
+	mu     sync.RWMutex
 }
 
 func NewDatabase(_ map[string]string) (*Database, error) {
 	return &Database{
-		data:     make(map[string]map[string]any),
-		bits:     make(map[string][]bool),
-		cacheKey: make(map[string]string),
+		tables: make(map[string]*tableData),
 	}, nil
 }

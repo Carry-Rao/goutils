@@ -9,14 +9,14 @@ import (
 )
 
 type Table struct {
-	db        *Database
+	td        *tableData
 	tableName string
-	cacheKey  string
 	schema    *api.CachedSchema
+	bf        BloomFilter
 }
 
 func (t *Table) Ins(example any, _ time.Duration) error {
-	if t.cacheKey == "" {
+	if t.td.cacheKey == "" {
 		return ErrNotFound
 	}
 
@@ -25,23 +25,24 @@ func (t *Table) Ins(example any, _ time.Duration) error {
 		return fmt.Errorf("example must be struct or pointer to struct")
 	}
 
-	f, found := t.schema.FieldMap[t.cacheKey]
+	f, found := t.schema.FieldMap[t.td.cacheKey]
 	if !found {
 		return ErrNotFound
 	}
 	idVal := val.Field(f.Index).Interface()
 	key := t.tableName + "_" + fmt.Sprintf("%v", idVal)
 
-	t.add(key)
+	h1, h2 := t.hashPair(key)
+	t.bf.Add(h1, h2)
 
-	t.db.mu.Lock()
-	defer t.db.mu.Unlock()
-	t.db.data[t.tableName][key] = example
+	t.td.mu.Lock()
+	t.td.data[key] = example
+	t.td.mu.Unlock()
 	return nil
 }
 
 func (t *Table) Get(example any, whereFields []string, _ time.Duration) ([]any, error) {
-	if t.cacheKey == "" {
+	if t.td.cacheKey == "" {
 		return nil, ErrNotFound
 	}
 
@@ -50,30 +51,30 @@ func (t *Table) Get(example any, whereFields []string, _ time.Duration) ([]any, 
 		return nil, fmt.Errorf("example must be struct or pointer to struct")
 	}
 
-	f, found := t.schema.FieldMap[t.cacheKey]
+	f, found := t.schema.FieldMap[t.td.cacheKey]
 	if !found {
 		return nil, ErrNotFound
 	}
 	idVal := val.Field(f.Index).Interface()
 	key := t.tableName + "_" + fmt.Sprintf("%v", idVal)
 
-	if !t.contains(key) {
+	h1, h2 := t.hashPair(key)
+	if !t.bf.Contains(h1, h2) {
 		return nil, ErrNotFound
 	}
 
-	t.db.mu.RLock()
-	defer t.db.mu.RUnlock()
+	t.td.mu.RLock()
+	d, ok := t.td.data[key]
+	t.td.mu.RUnlock()
 
-	d, ok := t.db.data[t.tableName][key]
 	if !ok {
 		return nil, ErrNotFound
 	}
-
 	return []any{d}, nil
 }
 
 func (t *Table) Set(example any, whereFields []string, _ time.Duration) error {
-	if t.cacheKey == "" {
+	if t.td.cacheKey == "" {
 		return ErrNotFound
 	}
 
@@ -82,25 +83,26 @@ func (t *Table) Set(example any, whereFields []string, _ time.Duration) error {
 		return fmt.Errorf("example must be struct or pointer to struct")
 	}
 
-	f, found := t.schema.FieldMap[t.cacheKey]
+	f, found := t.schema.FieldMap[t.td.cacheKey]
 	if !found {
 		return ErrNotFound
 	}
 	idVal := val.Field(f.Index).Interface()
 	key := t.tableName + "_" + fmt.Sprintf("%v", idVal)
 
-	if !t.contains(key) {
+	h1, h2 := t.hashPair(key)
+	if !t.bf.Contains(h1, h2) {
 		return ErrNotFound
 	}
 
-	t.db.mu.Lock()
-	defer t.db.mu.Unlock()
-	t.db.data[t.tableName][key] = example
+	t.td.mu.Lock()
+	t.td.data[key] = example
+	t.td.mu.Unlock()
 	return nil
 }
 
 func (t *Table) Del(example any, whereFields []string, _ time.Duration) error {
-	if t.cacheKey == "" {
+	if t.td.cacheKey == "" {
 		return ErrNotFound
 	}
 
@@ -109,48 +111,27 @@ func (t *Table) Del(example any, whereFields []string, _ time.Duration) error {
 		return fmt.Errorf("example must be struct or pointer to struct")
 	}
 
-	f, found := t.schema.FieldMap[t.cacheKey]
+	f, found := t.schema.FieldMap[t.td.cacheKey]
 	if !found {
 		return ErrNotFound
 	}
 	idVal := val.Field(f.Index).Interface()
 	key := t.tableName + "_" + fmt.Sprintf("%v", idVal)
 
-	if !t.contains(key) {
+	h1, h2 := t.hashPair(key)
+	if !t.bf.Contains(h1, h2) {
 		return ErrNotFound
 	}
 
-	t.db.mu.Lock()
-	defer t.db.mu.Unlock()
-	delete(t.db.data[t.tableName], key)
+	t.td.mu.Lock()
+	delete(t.td.data, key)
+	t.td.mu.Unlock()
 	return nil
 }
 
-func (t *Table) add(s string) {
-	h1 := t.hash(s, 1)
-	h2 := t.hash(s, 2)
-	bits := t.db.bits[t.tableName]
-	for i := 0; i < 3; i++ {
-		idx := (h1 + uint64(i)*h2) % 1024
-		bits[idx] = true
-	}
-}
-
-func (t *Table) contains(s string) bool {
-	h1 := t.hash(s, 1)
-	h2 := t.hash(s, 2)
-	bits := t.db.bits[t.tableName]
-	for i := 0; i < 3; i++ {
-		idx := (h1 + uint64(i)*h2) % 1024
-		if !bits[idx] {
-			return false
-		}
-	}
-	return true
-}
-
-func (t *Table) hash(s string, seed uint64) uint64 {
+func (t *Table) hashPair(s string) (uint64, uint64) {
 	h := fnv.New64a()
 	h.Write([]byte(s))
-	return h.Sum64() + seed
+	v := h.Sum64()
+	return v + 1, v + 2
 }
