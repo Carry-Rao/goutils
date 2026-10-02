@@ -1,0 +1,44 @@
+name: Go Check
+
+on:
+  push:
+    branches:
+      - main
+      - master
+      - develop
+  pull_request:
+    branches:
+      - main
+      - master
+      - develop
+  workflow_dispatch:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Go 1.24
+        uses: actions/setup-go@v5
+        with:
+          go-version: 1.24
+          cache: true
+
+      - name: Run AST check
+        run: go run .github/workflows/check.go
+
+      - name: Go vet
+        run: go vet ./...
+
+      - name: Staticcheck
+        run: go install honnef.co/go/tools/cmd/staticcheck@latest && staticcheck ./...
+
+      - name: Tests with race detector
+        run: go test ./... -race -count=1
+
+      # -coverpkg attributes coverage to the packages a test exercises, not just
+      # the one it lives in; otherwise the shared database core reads as 0%.
+      - name: Coverage
+        run: |
+          go test ./database/... -coverpkg=./database/... -coverprofile=coverage.out
+          go tool cover -func=coverage.out | tail -1
