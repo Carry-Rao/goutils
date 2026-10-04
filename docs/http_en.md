@@ -129,19 +129,33 @@ r.Option("/api/:string").
 
 ## 404 and 405
 
-Routes are held in one tree per method. For each request:
+Routes are held in one tree per method. Registering a route also plants a **405
+stub** at that same path in every *other* method's tree, so the common case never
+inspects the other trees:
 
-1. Match against the current method's tree; on a hit, run middleware then the handler
-2. On a miss, inspect **every method's tree**
-   - the path exists under another method → `405 Method Not Allowed`, with an `Allow` header listing them
-   - the path exists nowhere → `404 Not Found`
+1. `GET /users` registers a handler on the GET tree, and a stub answering 405 on
+   the POST, PUT, DELETE, PATCH and HEAD trees.
+2. A request matches against **its own method's tree only**.
+   - a real handler → run middleware then the handler
+   - a 405 stub → `405 Method Not Allowed`, with `Allow` listing the methods that
+     do serve the path
+   - nothing → `404 Not Found`
 
 ```go
 r.GET("/users", h) // GET only
 
 // POST /users  =>  405, Allow: GET
-// GET  /nope   =>  404
+// POST /users/1 =>  404   (no stub was planted for a path nobody registered)
+// GET  /nope    =>  404
 ```
+
+Only a stub needs the other trees, and only to build the `Allow` header — 405 is a
+rare path, so the normal request pays nothing.
+
+A stub is planted only where a real route is absent, and **a real handler always
+beats a stub** during matching. Without that rule the stub for `/user/:int` would
+shadow a real `POST /user/:string` handler, because `Int` outranks `String` in
+variable priority. Registering a method later simply overwrites the stub.
 
 This fixes cases where the standard library's `ServeMux` returns 405 without `Allow`, and cases where it wrongly reports 404.
 
@@ -241,13 +255,14 @@ Matching is O(path depth): one map lookup per level plus at most one type check.
 - Middleware runs only after a successful match, so unmatched requests pay nothing
 - Matching and execution are separated: `match` is side-effect free, `exec` runs middleware and the handler
 
-`405` detection walks the other method trees and is **triggered only when the current method misses**, so normally routed requests pay nothing for it.
+A `405` is answered from a stub in the current method's own tree, so normally routed requests never look at another tree. The other trees are consulted only to build the `Allow` header on an actual `405`.
 
 `bench_test.go` provides comparisons against `http.ServeMux`. Run it with `go test -bench=. -benchmem ./http/router/`.
 
 ## Breaking changes
 
 - `BadRequest` was renamed to `MethodNotAllowed`; the status code changed from `400` to `405`
+- 405 is answered from a stub planted at registration time instead of by probing every method tree; a real handler always outranks a stub
 - Middleware no longer runs for unmatched requests (404/405)
 - Middleware receives the complete variable list rather than the prefix matched so far
 - `:any` was removed; `:string` is the only catch-all and does not span `/`

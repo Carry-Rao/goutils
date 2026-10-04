@@ -20,10 +20,17 @@ type Router struct {
 }
 
 func New() *Router {
-	return &Router{
+	r := &Router{
 		roots:       make(map[string]*pathTree),
 		corsConfigs: nil,
 	}
+	// Every method gets a tree up front, so registration always has somewhere to
+	// plant its 405 stub. Without this a method that was never registered would
+	// have no tree to answer from and would fall back to probing the others.
+	for _, method := range defaultMethods {
+		r.roots[method] = r.newRoot()
+	}
+	return r
 }
 
 func splitPath(path string) []string {
@@ -40,7 +47,60 @@ func (r *Router) Handle(method, pattern string, handler func(http.ResponseWriter
 		root = r.newRoot()
 		r.roots[method] = root
 	}
-	root.addRoute(splitPath(pattern), handler)
+	segments := splitPath(pattern)
+	root.addRoute(segments, handler)
+
+	// Plant a 405 stub for every other method at the same path, so a request
+	// finds its answer in its own tree instead of probing the others.
+	r.plantStubs(method, segments)
+}
+
+// plantStubs gives each other method a 405 responder at this path, but only
+// where it has no real handler. Registering a route later overwrites the stub,
+// because a real handler always outranks one.
+func (r *Router) plantStubs(registered string, segments []string) {
+	for method := range r.roots {
+		if method == registered {
+			continue
+		}
+		r.roots[method].plant(segments)
+	}
+}
+
+// plant installs a stub at the given segments unless a real route already
+// occupies that node.
+//
+// Intermediate nodes are created along the way. That is safe because they carry
+// no handler: match keeps descending through a node whose Function is nil and
+// only stops where the stub is, so POST /users still 404s when only GET
+// /users exists.
+func (p *pathTree) plant(segments []string) {
+	if len(segments) == 0 {
+		return
+	}
+	seg := segments[0]
+
+	var child *pathTree
+	if varType, ok := parseVarType(seg); ok {
+		if child = p.SubVariablesPaths[varType]; child == nil {
+			child = p.newNode(seg)
+			p.SubVariablesPaths[varType] = child
+		}
+	} else {
+		if child = p.SubPaths[seg]; child == nil {
+			child = p.newNode(seg)
+			p.SubPaths[seg] = child
+		}
+	}
+
+	if len(segments) == 1 {
+		if child.Function == nil {
+			child.Function = notAllowedHandler
+			child.MethodNotAllowed = true
+		}
+		return
+	}
+	child.plant(segments[1:])
 }
 
 func (r *Router) GET(pattern string, handler func(http.ResponseWriter, *http.Request, []string)) {
@@ -228,23 +288,33 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		}
 	}
 
-	// A nil root means the method was never registered; fall through so the
-	// 404/405 decision below inspects every tree.
+	// A nil root means the method was never registered. Otherwise the tree
+	// answers directly: either a real route, or a 405 stub planted at
+	// registration time. Only the latter needs the other trees, to build Allow.
 	if root := r.roots[req.Method]; root != nil {
 		if m, ok := root.match(req.URL.Path); ok {
+			if m.notAllowed {
+				r.writeNotAllowed(w, req, req.URL.Path)
+				return
+			}
 			m.exec(w, req)
 			return
 		}
 	}
 
-	// No route for this method. If the path exists under other methods the
-	// correct answer is 405, otherwise 404.
+	// The method tree exists but the path is not in it, which happens when a
+	// method was registered after this path and so no stub was planted.
 	if allowed := r.allowedMethods(req.URL.Path); len(allowed) > 0 {
-		w.Header().Set("Allow", strings.Join(allowed, ", "))
-		MethodNotAllowed(w, req, nil)
+		r.writeNotAllowed(w, req, req.URL.Path)
 		return
 	}
 	NotFound(w, req, nil)
+}
+
+// writeNotAllowed replies 405 with the methods that do serve this path.
+func (r *Router) writeNotAllowed(w http.ResponseWriter, req *http.Request, path string) {
+	w.Header().Set("Allow", strings.Join(r.allowedMethods(path), ", "))
+	MethodNotAllowed(w, req, nil)
 }
 
 func (r *Router) ListenAndServe(addr string) error {

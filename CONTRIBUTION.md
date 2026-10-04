@@ -138,13 +138,28 @@ The database module is generic over the model type `T`. Follow these rules when 
 - **`Options.Values` semantics are load-bearing.** Empty `Values` means "assign everything from `updated`"; non-empty means "assign exactly these, touch nothing else". Changing this silently destroys data in the second form.
 - Every write path goes through `TxRunner`. A table over a `*sql.DB` opens a transaction per write; a table inside `Tx` joins the caller's transaction via `TxTxRunner`. Do not call `t.exec` directly from a write method.
 - `Database.Close() error` is part of the interface; a composite reports every layer's failure via `errors.Join`.
+- **`Options.SkipSet` and `Options.ValueFor` are exported on purpose.** The SQL and JSON backends must resolve `Skip` and `Values` to columns identically, so that resolution lives in one place. Keep them exported and shared rather than reimplementing it per backend.
+
+### Backends
+
+- **Never hardcode a TLS setting.** `sslmode` and `tls` are read from the config map and omitted when unset, so the driver's own default applies. Baking in `sslmode=disable` silently downgrades every production connection; baking in `verify-full` breaks local servers with no TLS.
+- Build DSNs with `net/url` or the driver's own config type. Hand-interpolating credentials with `fmt.Sprintf` breaks on any password containing `@`, `/`, `?` or `#`.
+- Any config key the backend does not recognise is forwarded to the driver as a parameter. Consumed keys must be excluded, or they leak back into the query string.
+- Watch for `url.URL.Query()`: it returns a **copy**, so parameters set on it are dropped unless written back to `RawQuery`.
+- The JSON backend rewrites the whole file per write, through a temp file plus `rename`. Keep it that way — rename is atomic within a filesystem, so a crash cannot leave truncated JSON. Reads work on an immutable snapshot because `update` clones first and swaps the pointer last, which is why handing `s.data` to a reader is safe.
+- A transaction gets a store with `transient` set, which makes `update` edit the shared draft **in place**. Cloning again there would strand the changes in a copy nothing commits.
+- `Exec` on the JSON backend must decode every row into `T` before writing anything, so one malformed row leaves the table untouched instead of half-replaced.
+- Reflection helpers that produce Go values need `reflect.New(t).Elem()`, not `reflect.MakeSlice`/`MakeMapWithSize` — the latter return values a later `Set` will panic on.
 
 ### Routing
 
 - Keep route matching side-effect free. `pathTree.match` resolves a path only; middleware and handlers run afterwards in `routeMatch.exec`. Do not execute middleware during traversal.
 - Any new variable type must be added in four places: the `Type` constants, `matchType`, the `varPriority` array, and `parseVarType` for registration. Omitting `varPriority` makes the type unreachable.
 - `:string` is the single-segment catch-all and must not span `/`. There is deliberately no multi-segment wildcard; use `Static` or a `Sub` router for path tails.
-- The 404/405 decision inspects every method tree. When adding methods to `defaultMethods`, verify the `Allow` header contents still make sense.
+- **A 405 stub must never shadow a real route.** `pathTree.resolve` picks the literal before the variables and then `varPriority`, but any candidate holding a real handler wins over one holding a stub. Dropping that tie-break lets the stub planted for `/user/:int` hide a real `POST /user/:string`, since `Int` outranks `String`. `http/router/method_test.go` pins this down.
+- Registering a route must clear `MethodNotAllowed` on that node. `All` relies on it: each method overwrites the stub the previous registration planted. Leaving the flag set makes a real handler report 405.
+- `Router.New` pre-creates a tree per `defaultMethods` entry, because `plantStubs` needs somewhere to plant. Adding a method to `defaultMethods` gives it the same treatment; `OPTIONS` is absent on purpose and still falls back to probing.
+- `pathExists` deliberately ignores stubs — a 405 stub is not evidence that a path is allowed, and counting it would put every method in `Allow`.
 
 ### General Go Conventions
 

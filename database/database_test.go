@@ -26,10 +26,18 @@ func TestParseFieldDefaults(t *testing.T) {
 	if _, ok := s.FieldMap["Email"]; ok {
 		t.Error("db tag must rename the column")
 	}
-	if !s.FieldMap["email_address"].IsPrimary && s.FieldMap["email_address"].IsPrimary {
-		t.Fatal("unreachable")
+	if _, ok := s.Lookup("email_address"); !ok {
+		t.Error("renamed column not reachable by its column name")
 	}
-	if _, ok := s.FieldMap["skip"]; ok {
+}
+
+// Unexported fields exist only to be skipped. Referencing one keeps the field
+// from reading as dead code.
+func TestUnexportedFieldNotMapped(t *testing.T) {
+	if got := (full{}).skip; got != "" {
+		t.Errorf("unexpected value %q", got)
+	}
+	if _, ok := SchemaOf[full]().FieldMap["skip"]; ok {
 		t.Error("unexported fields must not be mapped")
 	}
 }

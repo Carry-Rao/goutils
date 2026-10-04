@@ -136,13 +136,28 @@ database 模块以模型类型 `T` 为泛型参数，修改时请遵守：
 - 所有写路径都走 `TxRunner`。基于 `*sql.DB` 的表每次写开一个事务；`Tx` 里的表通过 `TxTxRunner` 加入调用方的事务。不要在写方法里直接调 `t.exec`。
 - `Database.Close() error` 属于接口的一部分；无资源的后端返回 nil，
   复合后端用 `errors.Join` 上报全部失败。
+- **`Options.SkipSet` 与 `Options.ValueFor` 是有意导出的。** SQL 与 JSON 后端必须把 `Skip` 和 `Values` 解析到列的行为完全一致，所以这段解析只写一份。保持导出并共用，不要每个后端各自实现。
+
+### 后端约定
+
+- **绝不硬编码 TLS 设置。** `sslmode` 与 `tls` 从配置 map 读取，不传就完全省略，交给驱动自己的默认策略。写死 `sslmode=disable` 会悄悄把所有生产连接降级；写死 `verify-full` 又会弄坏没配 TLS 的本地服务器。
+- 用 `net/url` 或驱动自带的配置类型构造 DSN。用 `fmt.Sprintf` 手工拼凭据，遇到密码里含 `@`、`/`、`?`、`#` 就会出错。
+- 后端不认识的配置键要透传给驱动作为参数；已消费的键必须排除，否则它们会漏回查询串里。
+- 注意 `url.URL.Query()` 返回的是**副本**，设上去的参数如果不写回 `RawQuery` 就会被丢掉。
+- JSON 后端每次写都通过临时文件加 `rename` 重写整个文件。这个方式要保持 —— 同一文件系统内 rename 是原子的，崩溃不会留下截断的 JSON。读操作跑在不可变快照上，因为 `update` 先克隆、最后才换指针，所以把 `s.data` 交给读者是安全的。
+- 事务拿到的是 `transient` 为真的 store，这会让 `update` **就地**修改共享草稿。在那里再克隆一次，改动就会滞留在没人提交的副本里。
+- JSON 后端的 `Exec` 必须先把每一行都解码成 `T` 再落盘，这样某一行格式错误时表不会被替换一半。
+- 需要构造 Go 值的反射辅助函数要用 `reflect.New(t).Elem()`，不要用 `reflect.MakeSlice`/`MakeMapWithSize` —— 后两者返回的值之后调 `Set` 会 panic。
 
 ### 路由约定
 
 - 保持路由匹配无副作用。`pathTree.match` 只解析路径，中间件与 handler 之后由 `routeMatch.exec` 执行，不要在遍历过程中执行中间件。
 - 新增变量类型需同步修改四处：`Type` 常量、`matchType`、`varPriority` 数组、`parseVarType`（注册用）。漏掉 `varPriority` 会导致该类型无法被匹配到。
 - `:string` 是单片段 catch-all，**不得**跨 `/`。本库刻意不提供跨斜杠的通配变量，尾部多段路径请用 `Static` 或 `Sub` 路由。
-- 404/405 的判定依赖遍历全部方法的路由树。修改 `defaultMethods` 后请确认 `Allow` 头的内容仍然正确。
+- **405 桩绝不能遮住真路由。** `pathTree.resolve` 先按字面量、再按 `varPriority` 取候选，但任何持有真处理器的候选都要赢过持有桩的。少了这个平局规则，`/user/:int` 上的桩就会盖住真正注册的 `POST /user/:string`，因为 `Int` 优先级高于 `String`。`http/router/method_test.go` 有针对性测试。
+- 注册路由时必须清掉该节点上的 `MethodNotAllowed`。`All` 依赖这一点：每个方法都会覆盖上一个注册种下的桩。标志没清会导致真处理器返回 405。
+- `Router.New` 会为 `defaultMethods` 里的每一项预先建树，因为 `plantStubs` 需要地方种桩。往 `defaultMethods` 加方法会得到同样待遇；`OPTIONS` 是有意排除的，它仍走回退探测。
+- `pathExists` 刻意忽略桩 —— 405 桩不能算"该路径可用"的证据，算了就会把所有方法都写进 `Allow`。
 
 ### 通用约定
 

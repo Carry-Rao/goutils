@@ -268,8 +268,9 @@ func opName(op ConditionOp) string {
 	}
 }
 
-// skipSet reports whether a column is excluded from Set.
-func (o Options) skipSet(s *Schema, column string) bool {
+// SkipSet reports whether a column is excluded from Set. Backends share this so
+// a column named in Skip behaves identically everywhere.
+func (o Options) SkipSet(s *Schema, column string) bool {
 	for _, name := range o.Skip {
 		if f, ok := s.Lookup(name); ok && f.ColumnName == column {
 			return true
@@ -278,8 +279,9 @@ func (o Options) skipSet(s *Schema, column string) bool {
 	return false
 }
 
-// valueOp returns the assignment recorded for a column, if any.
-func (o Options) valueOp(s *Schema, column string) (Value, bool) {
+// ValueFor returns the assignment recorded for a column, if any. Backends share
+// this so a column named in Values behaves identically everywhere.
+func (o Options) ValueFor(s *Schema, column string) (Value, bool) {
 	for _, v := range o.Values {
 		if f, ok := s.Lookup(v.Column); ok && f.ColumnName == column {
 			return v, true

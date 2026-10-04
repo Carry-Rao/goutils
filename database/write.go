@@ -72,11 +72,11 @@ func (t *SQLTable[T]) Set(old, updated T, opts Options) error {
 	idx := 1
 
 	for _, f := range t.schema.Scalars {
-		if opts.skipSet(t.schema, f.ColumnName) {
+		if opts.SkipSet(t.schema, f.ColumnName) {
 			continue
 		}
 		if targeted {
-			v, ok := opts.valueOp(t.schema, f.ColumnName)
+			v, ok := opts.ValueFor(t.schema, f.ColumnName)
 			if !ok || v.Op != OpAssign {
 				continue
 			}
@@ -107,11 +107,11 @@ func (t *SQLTable[T]) Set(old, updated T, opts Options) error {
 			}
 		}
 		for _, f := range t.schema.Collections {
-			if opts.skipSet(t.schema, f.ColumnName) {
+			if opts.SkipSet(t.schema, f.ColumnName) {
 				continue
 			}
 			if targeted {
-				if _, ok := opts.valueOp(t.schema, f.ColumnName); !ok {
+				if _, ok := opts.ValueFor(t.schema, f.ColumnName); !ok {
 					continue // not named, so left alone
 				}
 			}
@@ -125,7 +125,7 @@ func (t *SQLTable[T]) Set(old, updated T, opts Options) error {
 
 // applyChild performs the requested operation on one collection field.
 func (t *SQLTable[T]) applyChild(ex Execer, f FieldInfo, pk FieldInfo, pkVal any, newVal reflect.Value, opts Options) error {
-	op, hasOp := opts.valueOp(t.schema, f.ColumnName)
+	op, hasOp := opts.ValueFor(t.schema, f.ColumnName)
 
 	if !hasOp {
 		return t.replaceChild(ex, f, pk, pkVal, childPairs(newVal.Field(f.Index).Interface()))

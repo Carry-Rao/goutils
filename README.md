@@ -14,7 +14,7 @@ go get github.com/Carry-Rao/goutils
 
 | Module | Description | Docs |
 |--------|-------------|------|
-| Database | SQL `Database[T]` / `Table[T]` over MySQL, PostgreSQL, and SQLite, with conditions, transactions, and slice/map fields stored in companion tables | [EN](docs/database_en.md) · [中文](docs/database_zh.md) |
+| Database | SQL `Database[T]` / `Table[T]` over MySQL, PostgreSQL, and SQLite, plus a file-backed JSON backend. Conditions, transactions, and slice/map fields | [EN](docs/database_en.md) · [中文](docs/database_zh.md) |
 | Cache | Key-value `Table[T]` over memory, Redis, and bloom filter, chainable via `mixture` | [EN](docs/database_en.md#cache-module) · [中文](docs/database_zh.md#cache-模块) |
 | HTTP Router | Prefix-tree router with typed path variables, middleware, per-pattern CORS, and correct 404/405 handling | [EN](docs/http_en.md) · [中文](docs/http_zh.md) |
 | Log | Buffered multi-level logging with color output | [EN](docs/log_en.md) · [中文](docs/log_zh.md) |
@@ -90,14 +90,24 @@ one you want and call its `NewDatabase`. There is no factory and no TTL.
 - **Queries no longer need raw SQL.** `Options.Where` covers comparisons, `IN`,
   `BETWEEN`, `LIKE`, `IS NULL`, and collection membership; `Options.Values` adds
   `Union` / `Difference` / `Clear`; `Options.Skip` excludes columns.
+- A **JSON backend** was added: one file holds the whole database, keyed by table
+  and then by primary key, with collections nested inside each row. Non-key
+  conditions are a linear scan in Go. TLS settings are no longer hardcoded —
+  `sslmode` / `tls` come from the config map and are omitted when unset.
+- 405 is now answered from a stub planted at registration time instead of by
+  probing every method tree; a real handler always outranks a stub.
 - `database/factory` was removed; backends are imported directly.
 - `router.BadRequest` became `router.MethodNotAllowed`; status code 400 → 405
 - Router `:any` was removed; `:string` is the only catch-all and does not span `/`
 
 ## Status
 
-SQLite is exercised end to end by the test suite, including transactions and
-collection fields. The memory, bloom, and mixture backends are covered too. MySQL,
-PostgreSQL, and Redis compile and are exercised by the type checker but are not
-covered by automated tests, as they require external services. Not recommended
-for production use without your own testing.
+Covered by the test suite end to end: **SQLite** (including transactions,
+collection fields and set operations) and **JSON** (including atomic writes,
+rollback and linear-scan filtering). Connection strings for MySQL and PostgreSQL
+are covered by string-level tests; the live connections are not, since they need
+external services. The memory, bloom and mixture backends are covered too.
+
+Not covered by automated tests: live MySQL, PostgreSQL and Redis connections, as
+they require external services. Not recommended for production use without your
+own testing.

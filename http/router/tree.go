@@ -13,6 +13,53 @@ type pathTree struct {
 
 	// Subtree marks a node that also receives every path below it.
 	Subtree bool
+
+	// MethodNotAllowed marks a node planted by registration to answer 405 for a
+	// method that has no handler here. A real handler always beats one of these,
+	// so a stub can never shadow a route that genuinely exists.
+	MethodNotAllowed bool
+}
+
+// notAllowedHandler is the single 405 responder shared by every stub. Sharing one
+// value keeps the stubs free to compare against, and means the behaviour cannot
+// drift between them.
+func notAllowedHandler(w http.ResponseWriter, req *http.Request, _ []string) {
+	MethodNotAllowed(w, req, nil)
+}
+
+// resolve returns the child node for seg.
+//
+// Candidates are considered in the usual order — literal before variable, then
+// varPriority — but a node holding a real handler is preferred over a 405 stub.
+// Without that rule, a stub planted for /user/:int would shadow a real POST
+// handler registered at /user/:string, because Int outranks String.
+func (p *pathTree) resolve(seg string) (*pathTree, bool) {
+	var literal *pathTree
+	if n := p.SubPaths[seg]; n != nil {
+		literal = n
+		if !n.MethodNotAllowed {
+			return n, false
+		}
+	}
+
+	var stub *pathTree
+	for _, t := range varPriority {
+		n := p.SubVariablesPaths[t]
+		if n == nil || !matchType(seg, t) {
+			continue
+		}
+		if !n.MethodNotAllowed {
+			return n, true
+		}
+		if stub == nil {
+			stub = n
+		}
+	}
+
+	if stub != nil {
+		return stub, true
+	}
+	return literal, false
 }
 
 func parseVarType(seg string) (Type, bool) {
@@ -47,6 +94,8 @@ func (p *pathTree) addSubtree(paths []string, handler func(http.ResponseWriter, 
 func (p *pathTree) route(paths []string, handler func(http.ResponseWriter, *http.Request, []string), subtree bool) {
 	if len(paths) == 0 {
 		p.Function = handler
+		// Registering here replaces any 405 stub planted for this method.
+		p.MethodNotAllowed = false
 		if subtree {
 			p.Subtree = true
 		}

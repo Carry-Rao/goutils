@@ -14,10 +14,11 @@ assignment and no ordering, so a single interface covering both would be mostly
 ## Package layout
 
 ```
-database/                     SQL: interfaces, schema, dialects, Options, shared Table
+database/                     interfaces, schema, dialects, Options, shared SQL Table
 database/sql/mysql/           thin backends — embed database.Backend[T]
 database/sql/postgresql/
 database/sql/sqlite/
+database/json/                file-backed: one JSON file holds the whole database
 database/cache/               key-value: its own Table, Schema, Config
 database/cache/memory/
 database/cache/bloom/
@@ -149,6 +150,40 @@ db, err := mysql.NewDatabase[User](map[string]string{
 
 `Close() error` is part of the interface, so `defer db.Close()` is checked rather
 than ignored.
+
+### Connection security
+
+TLS is **never** hardcoded. Both DSN builders omit the setting entirely when you
+do not supply it, so the driver's own default applies:
+
+| Backend | Key | Omitted default |
+|---------|-----|-----------------|
+| PostgreSQL | `sslmode` | pgx's own policy |
+| MySQL | `tls` | the driver's own policy |
+| JSON | *(file-backed, no connection)* | — |
+
+Set `sslmode` to `verify-full` or `tls` to a registered config name in
+production. Setting `sslmode=disable` for a local server with no TLS is fine, but
+it is your call rather than the library's.
+
+Any key the backend does not recognise is forwarded as a driver parameter, so
+`connect_timeout`, `application_name`, `readTimeout` and friends pass straight
+through:
+
+```go
+db, err := mysql.NewDatabase[User](map[string]string{
+	"user": "app", "host": "db", "port": "3306", "dbname": "app",
+	"tls": "true", "timeout": "5s", "readTimeout": "10s",
+})
+```
+
+Credentials go through `net/url` (PostgreSQL) and `mysql.Config` (MySQL), so a
+password containing `@`, `/`, `?` or `#` still produces a correct connection
+string instead of a silently mis-parsed one.
+
+One inherent limit: the MySQL DSN format splits on the first `:`, so a **username**
+containing a colon cannot be represented. Passwords are escaped correctly; only
+the username is affected, and that is the driver's format, not this library.
 
 ## Tables
 
@@ -344,6 +379,89 @@ err = db.Exec("UPDATE users SET Name = ? WHERE ID = ?", "renamed", 1)
 Both are available on `Tx` as well. `Query` scans into `[]T` using the same
 schema mapping, so collection fields are simply left empty — use `Get` if you
 need them.
+
+The JSON backend is the exception: see below.
+
+## JSON backend
+
+`database/json` stores a whole database in **one file**. It suits tests, local
+tools, fixtures and small datasets — not concurrent writers, and not anything
+large enough to want an index.
+
+```go
+import "github.com/Carry-Rao/goutils/database/json"
+
+db, err := json.NewDatabase[User](map[string]string{"filename": "./data/app.json"})
+defer db.Close()
+```
+
+One file holds every table, keyed by table name and then by primary key:
+
+```json
+{
+  "users": {
+    "1": {"ID": 1, "Name": "alice", "Tags": ["vip", "beta"], "Meta": {"theme": "dark"}},
+    "2": {"ID": 2, "Name": "bob"}
+  },
+  "posts": {
+    "7": {"ID": 7, "UserID": 1, "Title": "hi"}
+  }
+}
+```
+
+Two consequences worth knowing:
+
+- **The primary key is the object key**, so `Get` with an equality test on it
+  needs no scan. Any other predicate is a linear walk in Go.
+- **Collections nest inside the row** as ordinary JSON arrays and objects. There
+  are no companion tables here — the whole point of the file is that it is one
+  unit.
+
+Everything else behaves as it does on the SQL backends: the same tags, the same
+`Options`, the same `Values` union/difference/clear rules, `DeleteTable`, and
+`Tables()` to list what the file holds.
+
+### Query and Exec
+
+Neither speaks SQL, so both mean something else here:
+
+```go
+// Every row in the file, across every table. The SQL text is ignored.
+rows, err := db.Query("anything")
+
+// Overwrite one table wholesale. A payload that is not a JSON array is
+// rejected rather than silently clearing the table.
+err = db.Exec("users", []byte(`[{"ID":42,"Name":"new"}]`))
+```
+
+`Exec` decodes every row into `T` **before** writing, so one malformed row leaves
+the table untouched rather than half-replaced.
+
+### Durability
+
+Every write rewrites the whole file, so it goes to a temporary file in the same
+directory, is synced, and is then renamed over the target. Rename is atomic
+within a filesystem, so a reader never sees a truncated document and a crash
+cannot corrupt the file.
+
+Reads run against an immutable snapshot while a write proceeds elsewhere, so
+readers do not block each other. Writers are serialised.
+
+That rewrite-per-write is also what makes `Tx` exact: statements run against a
+private draft and the file is rewritten **once** at the end, so a failed
+transaction leaves it byte-for-byte unchanged.
+
+### Semantics that differ from SQL
+
+- **Ordering inside a collection.** `Get` returns tags in stored order, which for
+  a slice is the order they were written. Use `Contains`/`ContainsAll` rather than
+  comparing the slice directly.
+- **`LIKE` is case-sensitive** and understands the same `%` and `_` wildcards.
+- **`IS NULL`** is true only where a Go value can be nil — pointers, interfaces,
+  slices and maps. A non-pointer field decoded from JSON `null` holds its zero
+  value, so `IsNull` reports false for it.
+- **Paging without an order** falls back to primary key, so `Limit`/`Offset` stay
+  stable.
 
 ## Cache module
 

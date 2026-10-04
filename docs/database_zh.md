@@ -13,10 +13,11 @@
 ## 目录结构
 
 ```
-database/                     SQL：接口、schema、方言、Options、共用的 Table
+database/                     接口、schema、方言、Options、共用的 SQL Table
 database/sql/mysql/           薄后端，只嵌入 database.Backend[T]
 database/sql/postgresql/
 database/sql/sqlite/
+database/json/                文件存储：一个 JSON 文件装下整个数据库
 database/cache/               键值：自己的 Table、Schema、Config
 database/cache/memory/
 database/cache/bloom/
@@ -139,6 +140,37 @@ db, err := mysql.NewDatabase[User](map[string]string{
 `T` 可以是结构体，也可以是指向它的指针，两者共用同一份 schema。
 
 `Close() error` 在接口里，所以 `defer db.Close()` 是被检查的，不会被静默忽略。
+
+### 连接安全
+
+TLS **绝不硬编码**。不传时两个 DSN 构造都会完全省略该设置，交给驱动自己的默认
+策略：
+
+| 后端 | 配置键 | 省略时的默认 |
+|------|--------|--------------|
+| PostgreSQL | `sslmode` | pgx 自身的策略 |
+| MySQL | `tls` | 驱动自身的策略 |
+| JSON | *（文件存储，无连接）* | — |
+
+生产环境请把 `sslmode` 设成 `verify-full`，或把 `tls` 设成已注册的配置名。本地
+服务器没配 TLS 时设 `sslmode=disable` 没问题，但这是你的决定，不是库替你做的。
+
+后端不认识的键会原样透传给驱动作为参数，所以 `connect_timeout`、
+`application_name`、`readTimeout` 这些可以直接写：
+
+```go
+db, err := mysql.NewDatabase[User](map[string]string{
+	"user": "app", "host": "db", "port": "3306", "dbname": "app",
+	"tls": "true", "timeout": "5s", "readTimeout": "10s",
+})
+```
+
+凭据分别走 `net/url`（PostgreSQL）和 `mysql.Config`（MySQL）构造，所以密码里含
+`@` `/` `?` `#` 也能得到正确的连接串，而不是一个被悄悄解析错的串。
+
+有一个格式本身的限制：MySQL 的 DSN 按第一个 `:` 切分，所以**用户名**里带冒号无法
+表示。密码的转义是正确的，只有用户名受影响，而这是驱动的格式限制，不是本库
+的问题。
 
 ## 表
 
@@ -328,6 +360,79 @@ err = db.Exec("UPDATE users SET Name = ? WHERE ID = ?", "renamed", 1)
 
 `Tx` 上也有这两个方法。`Query` 用同一套 schema 映射扫成 `[]T`，集合字段留空，
 需要集合内容请用 `Get`。
+
+JSON 后端是唯一的例外，见下节。
+
+## JSON 后端
+
+`database/json` 把**整个数据库**放在**一个文件**里。适合测试、本地工具、测试
+夹具和小数据集——不适合并发写入，也不适合大数据量。
+
+```go
+import "github.com/Carry-Rao/goutils/database/json"
+
+db, err := json.NewDatabase[User](map[string]string{"filename": "./data/app.json"})
+defer db.Close()
+```
+
+一个文件装下所有表，先按表名、再按主键索引：
+
+```json
+{
+  "users": {
+    "1": {"ID": 1, "Name": "alice", "Tags": ["vip", "beta"], "Meta": {"theme": "dark"}},
+    "2": {"ID": 2, "Name": "bob"}
+  },
+  "posts": {
+    "7": {"ID": 7, "UserID": 1, "Title": "hi"}
+  }
+}
+```
+
+有两点值得知道：
+
+- **主键就是对象的 key**，所以对主键做等值判断的 `Get` 不需要扫表。其他条件都是
+  在 Go 里逐行线性扫描。
+- **集合直接嵌套在行对象里**，就是普通的 JSON 数组和对象。这里没有附属表——
+  单文件正是这个后端的意义所在。
+
+其余行为与 SQL 后端一致：同样的 tag、同样的 `Options`、同样的 `Values`
+union/difference/clear 规则、`DeleteTable`，以及 `Tables()` 查看文件里有哪些表。
+
+### Query 与 Exec
+
+这两个都不解释 SQL，所以在 JSON 后端里含义不同：
+
+```go
+// 返回文件里所有表的所有行，SQL 文本被忽略。
+rows, err := db.Query("随便写")
+
+// 整表覆盖。不是 JSON 数组的载荷会被拒绝，而不是悄悄清空这张表。
+err = db.Exec("users", []byte(`[{"ID":42,"Name":"new"}]`))
+```
+
+`Exec` 会**先**把每一行都解码成 `T` 再落盘，所以某一行格式错误时这张表原封不
+动，不会被替换一半。
+
+### 持久化
+
+每次写都会重写整个文件：先写同目录下的临时文件、fsync，然后 rename 覆盖目标。
+同一文件系统内 rename 是原子的，所以读到的永远是完整文档，崩溃也不会写坏文件。
+
+读操作跑在不可变快照上，即使同时有写在进行，所以读之间不互相阻塞；写之间串行
+化。
+
+也正因为每次写都是整文件重写，`Tx` 才是精确的：各条语句作用在一份私有草稿上，
+最后**只重写一次**文件，所以回滚后文件逐字节不变。
+
+### 与 SQL 不同的语义
+
+- **集合内部的顺序。** `Get` 返回的标签保持写入顺序，切片按写入次序返回。判断成
+  员请用 `Contains`/`ContainsAll`，不要直接比切片。
+- **`LIKE` 区分大小写**，通配符与 SQL 的 `%` 和 `_` 一致。
+- **`IS NULL`** 只在 Go 值可以为 nil 时成立——指针、接口、切片、映射。从 JSON
+  `null` 解出来的非指针字段是零值，`IsNull` 对它是 false。
+- **无排序的分页**回退到主键，所以 `Limit`/`Offset` 稳定。
 
 ## Cache 模块
 

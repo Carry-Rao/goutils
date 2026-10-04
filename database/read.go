@@ -1,7 +1,6 @@
 package database
 
 import (
-	"fmt"
 	"reflect"
 	"strings"
 )
@@ -306,10 +305,4 @@ func assignChild(fv reflect.Value, pairs [][2]string, f FieldInfo) {
 		s = reflect.Append(s, reflect.ValueOf(p[1]).Convert(f.GoElem))
 	}
 	fv.Set(s)
-}
-
-func must(err error) {
-	if err != nil {
-		panic(fmt.Sprintf("database: %v", err))
-	}
 }

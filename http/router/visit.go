@@ -128,22 +128,16 @@ func matchType(seg string, t Type) bool {
 // More specific types must be tried before the catch-all String.
 var varPriority = [...]Type{Int, Float, UUID, Alpha, AlphaNum, String}
 
-// matchVariable returns the child node for seg, honouring varPriority.
-func (p *pathTree) matchVariable(seg string) *pathTree {
-	for _, t := range varPriority {
-		if node := p.SubVariablesPaths[t]; node != nil && matchType(seg, t) {
-			return node
-		}
-	}
-	return nil
-}
-
 // routeMatch is a resolved path. nodes runs root to leaf so middleware
 // executes in registration order.
 type routeMatch struct {
 	nodes   []*pathTree
 	handler func(http.ResponseWriter, *http.Request, []string)
 	vars    []string
+
+	// notAllowed reports that the resolved node is a 405 stub rather than a real
+	// route, so the router can attach an Allow header before replying.
+	notAllowed bool
 }
 
 // exec runs middleware then the handler, reporting whether it got that far.
@@ -170,6 +164,7 @@ func (p *pathTree) match(path string) (*routeMatch, bool) {
 	if path == "" || path == "/" {
 		m.nodes = append(m.nodes, p)
 		m.handler = p.Function
+		m.notAllowed = p.MethodNotAllowed
 		return m, p.Function != nil
 	}
 
@@ -191,15 +186,12 @@ func (p *pathTree) match(path string) (*routeMatch, bool) {
 		}
 		seg := path[start:i]
 
-		// A literal segment always wins over any variable.
-		if next := node.SubPaths[seg]; next != nil {
-			node = next
-			m.nodes = append(m.nodes, node)
-			continue
-		}
-
-		if next := node.matchVariable(seg); next != nil {
-			m.vars = append(m.vars, seg)
+		// A literal segment outranks a variable, and a real handler outranks a
+		// 405 stub; resolve applies both rules.
+		if next, isVar := node.resolve(seg); next != nil {
+			if isVar {
+				m.vars = append(m.vars, seg)
+			}
 			node = next
 			m.nodes = append(m.nodes, node)
 			continue
@@ -209,6 +201,7 @@ func (p *pathTree) match(path string) (*routeMatch, bool) {
 		// matching so an explicit sibling route still wins.
 		if node.Subtree && node.Function != nil {
 			m.handler = node.Function
+			m.notAllowed = node.MethodNotAllowed
 			return m, true
 		}
 
@@ -216,11 +209,13 @@ func (p *pathTree) match(path string) (*routeMatch, bool) {
 	}
 
 	m.handler = node.Function
+	m.notAllowed = node.MethodNotAllowed
 	return m, node.Function != nil
 }
 
-// pathExists reports whether path resolves to a registered route.
+// pathExists reports whether path resolves to a real route. A 405 stub is not a
+// route, so it does not count.
 func (p *pathTree) pathExists(path string) bool {
 	m, ok := p.match(path)
-	return ok && m != nil
+	return ok && m != nil && !m.notAllowed
 }
