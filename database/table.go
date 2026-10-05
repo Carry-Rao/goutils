@@ -131,6 +131,16 @@ func (t *SQLTable[T]) createChildren() error {
 		if f.GoKind == reflect.Map {
 			unique = []string{t.dialect.Quote("k"), t.dialect.Quote("v"), t.dialect.Quote(t.parentColumn(pk))}
 		}
+		if f.IsGlobalUnique {
+			// Drop the parent column from the key: the value must not appear
+			// under any other parent either. For a map the key alone is the
+			// identity, so v is dropped too — one key, one owner.
+			if f.GoKind == reflect.Map {
+				unique = []string{t.dialect.Quote("k")}
+			} else {
+				unique = []string{t.dialect.Quote(f.ColumnName)}
+			}
+		}
 
 		ddl := "CREATE TABLE IF NOT EXISTS " + t.dialect.QuoteTable(table) +
 			" (" + strings.Join(cols, ",") + ", UNIQUE(" + strings.Join(unique, ",") + "))"
