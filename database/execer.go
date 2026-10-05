@@ -11,22 +11,25 @@ type DbTxRunner struct{ DB *sql.DB }
 func (r DbTxRunner) Run(fn func(Execer) error) error {
 	tx, err := r.DB.Begin()
 	if err != nil {
-		return err
+		return Normalize(err)
 	}
 	if err := fn(tx); err != nil {
 		if rbErr := tx.Rollback(); rbErr != nil {
-			return fmt.Errorf("%w (rollback failed: %v)", err, rbErr)
+			return fmt.Errorf("%w (rollback failed: %v)", Normalize(err), rbErr)
 		}
-		return err
+		return Normalize(err)
 	}
-	return tx.Commit()
+	return Normalize(tx.Commit())
 }
 
 // TxTxRunner reuses an already-open transaction: the work joins it rather than
 // opening a nested one.
 type TxTxRunner struct{ Exec Execer }
 
-func (r TxTxRunner) Run(fn func(Execer) error) error { return fn(r.Exec) }
+// Run normalises the result so a duplicate detected inside an enclosing
+// transaction still reaches the caller as ErrDuplicate once the outermost Run
+// rolls it back.
+func (r TxTxRunner) Run(fn func(Execer) error) error { return Normalize(fn(r.Exec)) }
 
 // sqlNullString scans a nullable text column into a plain string.
 type sqlNullString struct {
