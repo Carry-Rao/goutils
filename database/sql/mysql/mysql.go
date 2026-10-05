@@ -3,6 +3,7 @@ package mysql
 
 import (
 	"database/sql"
+	"errors"
 	"fmt"
 	"net"
 
@@ -15,7 +16,17 @@ type Database[T any] struct {
 	database.Backend[T]
 }
 
-func init() { database.Register("mysql") }
+func init() {
+	database.Register("mysql")
+	database.Classify(isDuplicate)
+}
+
+// isDuplicate recognises MySQL's ER_DUP_ENTRY / ER_DUP_ENTRY_WITH_KEY_NAME.
+// Both are 1062; the driver reports the difference through Message only.
+func isDuplicate(err error) bool {
+	var me *mysql.MySQLError
+	return errors.As(err, &me) && (me.Number == 1062 || me.Number == 1586)
+}
 
 // NewDatabase opens a connection. Recognised keys are user, password, host,
 // port, dbname, tls and charset; any other key is added to the driver's
