@@ -1,6 +1,6 @@
 # HTTP Router Module
 
-> 中文文档：[database_zh.md](database_zh.md) · [http_zh.md](http_zh.md) · [log_zh.md](log_zh.md)
+> Chinese documentation: [database_zh.md](database_zh.md) · [http_zh.md](http_zh.md) · [log_zh.md](log_zh.md)
 
 A prefix-tree router. Compared with `http.ServeMux` it adds typed path variables, middleware, per-pattern CORS, and a correct 404/405 distinction.
 

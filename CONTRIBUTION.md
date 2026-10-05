@@ -48,20 +48,20 @@ Scopes in use: `database`, `router`, `log`, `docs`, `ci`.
 ### Examples
 
 ```
-feat(router): 支持 :uuid 路径变量
+feat(router): support :uuid path variables
 
-新增 UUID 格式校验,非法格式不再命中路由,避免把非 UUID 段
-误判为合法标识。
+Validate the UUID shape so a malformed segment no longer matches,
+instead of being taken for a valid identifier.
 
 Closes #42
 ```
 
 ```
-fix(log): 修复缓冲日志缺少换行导致的多条记录粘连
+fix(log): buffered entries ran together on one line
 
-缓冲路径写入时未拷贝换行符,且条的长度计算把换行计为 0,导致
-所有缓冲记录挤在同一行。改由 addLog 统一追加换行,entryLen 与
-实际写入保持一致。
+The buffered path copied no newline and counted it as zero length,
+so every record landed on the same line. addLog now appends it in
+one place, keeping entryLen in step with what is written.
 ```
 
 ### Breaking changes

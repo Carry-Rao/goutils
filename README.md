@@ -1,6 +1,6 @@
 # Goutils
 
-[中文](docs/README_zh.md)
+[Chinese](docs/README_zh.md)
 
 A Go utility library for database abstraction, HTTP routing, and logging.
 
@@ -14,12 +14,12 @@ go get github.com/Carry-Rao/goutils
 
 | Module | Description | Docs |
 |--------|-------------|------|
-| Database | SQL `Database[T]` / `Table[T]` over MySQL, PostgreSQL, and SQLite, plus a file-backed JSON backend. Conditions, transactions, slice/map fields, and portable unique-violation detection | [EN](docs/database_en.md) · [中文](docs/database_zh.md) |
-| Cache | Key-value `Table[T]` over memory, Redis, and bloom filter, chainable via `mixture` | [EN](docs/database_en.md#cache-module) · [中文](docs/database_zh.md#cache-模块) |
-| HTTP Router | Prefix-tree router with typed path variables, middleware, per-pattern CORS, and correct 404/405 handling | [EN](docs/http_en.md) · [中文](docs/http_zh.md) |
-| Log | Buffered multi-level logging with color output | [EN](docs/log_en.md) · [中文](docs/log_zh.md) |
+| Database | SQL `Database[T]` / `Table[T]` over MySQL, PostgreSQL, and SQLite, plus a file-backed JSON backend. Conditions, transactions, slice/map fields, and portable unique-violation detection | [EN](docs/database_en.md) · [Chinese](docs/database_zh.md) |
+| Cache | Key-value `Table[T]` over memory, Redis, and bloom filter, chainable via `mixture` | [EN](docs/database_en.md#cache-module) · [Chinese](docs/database_zh.md#cache-模块) |
+| HTTP Router | Prefix-tree router with typed path variables, middleware, per-pattern CORS, and correct 404/405 handling | [EN](docs/http_en.md) · [Chinese](docs/http_zh.md) |
+| Log | Buffered multi-level logging with color output | [EN](docs/log_en.md) · [Chinese](docs/log_zh.md) |
 
-Contributing: [CONTRIBUTION.md](CONTRIBUTION.md) · [中文](docs/CONTRIBUTION_zh.md)
+Contributing: [CONTRIBUTION.md](CONTRIBUTION.md) · [Chinese](docs/CONTRIBUTION_zh.md)
 
 ## Database in one snippet
 

@@ -1,6 +1,6 @@
 # Log Module
 
-> 中文文档：[database_zh.md](database_zh.md) · [http_zh.md](http_zh.md) · [log_zh.md](log_zh.md)
+> Chinese documentation: [database_zh.md](database_zh.md) · [http_zh.md](http_zh.md) · [log_zh.md](log_zh.md)
 
 Buffered multi-level logging with color output.
 
