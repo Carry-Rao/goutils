@@ -66,31 +66,45 @@ func NewSQLTable[T any](exec Execer, runner TxRunner, table string, d Dialect) (
 func (t *SQLTable[T]) createMain() error {
 	var cols, pkCols []string
 
+	// declaredInline records that a column definition already carried PRIMARY
+	// KEY, so the table-level clause is not emitted a second time — two primary
+	// keys in one CREATE TABLE is an error on every backend.
+	var declaredInline bool
+
+	// The auto-increment primary key is deliberately kept out of Scalars so it
+	// never appears in an INSERT column list, which means it has to be emitted
+	// here from the schema instead. Without this the key falls through to the
+	// fallback below and is declared as a plain nullable column: the table then
+	// builds cleanly, the insert succeeds, and every read sees NULL.
+	if pk, err := t.schema.PrimaryKey(); err == nil && pk.IsAutoInc {
+		cols = append(cols, fmt.Sprintf("%s %s PRIMARY KEY %s",
+			t.dialect.Quote(pk.ColumnName), t.dialect.SQLType(pk.GoKind), t.dialect.AutoInc))
+		pkCols = append(pkCols, t.dialect.Quote(pk.ColumnName))
+		declaredInline = true
+	}
+
 	for _, f := range t.schema.Scalars {
 		def := fmt.Sprintf("%s %s", t.dialect.Quote(f.ColumnName), t.dialect.SQLType(f.GoKind))
-		switch {
-		case f.IsAutoInc && f.IsPrimary:
-			def += " PRIMARY KEY " + t.dialect.AutoInc
-		default:
-			if !f.IsNullable {
-				def += " NOT NULL"
-			}
-			if f.IsUnique {
-				def += " UNIQUE"
-			}
-			if f.IsPrimary {
-				pkCols = append(pkCols, t.dialect.Quote(f.ColumnName))
-			}
+		if !f.IsNullable {
+			def += " NOT NULL"
+		}
+		if f.IsUnique {
+			def += " UNIQUE"
+		}
+		if f.IsPrimary {
+			pkCols = append(pkCols, t.dialect.Quote(f.ColumnName))
 		}
 		cols = append(cols, def)
 	}
 
-	if len(pkCols) == 0 {
-		pk, _ := t.schema.PrimaryKey()
-		cols = append(cols, fmt.Sprintf("%s %s", t.dialect.Quote(pk.ColumnName), t.dialect.SQLType(pk.GoKind)))
-		pkCols = append(pkCols, t.dialect.Quote(pk.ColumnName))
+	if !declaredInline {
+		if len(pkCols) == 0 {
+			pk, _ := t.schema.PrimaryKey()
+			cols = append(cols, fmt.Sprintf("%s %s", t.dialect.Quote(pk.ColumnName), t.dialect.SQLType(pk.GoKind)))
+			pkCols = append(pkCols, t.dialect.Quote(pk.ColumnName))
+		}
+		cols = append(cols, "PRIMARY KEY ("+strings.Join(pkCols, ",")+")")
 	}
-	cols = append(cols, "PRIMARY KEY ("+strings.Join(pkCols, ",")+")")
 
 	stmt := "CREATE TABLE IF NOT EXISTS " + t.dialect.QuoteTable(t.table) + " (" + strings.Join(cols, ",") + ")"
 	_, err := t.exec.Exec(stmt)
