@@ -249,10 +249,19 @@ func (t *SQLTable[T]) replaceChild(ex Execer, f FieldInfo, pk FieldInfo, pkVal a
 	cols, holes, args := t.childInsert(f, pk, parent, pkVal, pairs)
 	// Duplicates are already merged for Union; IGNORE keeps a concurrent
 	// double-insert from failing the whole statement.
-	query := t.dialect.Ignore + "INTO " + tbl + " (" + strings.Join(cols, ",") +
-		") VALUES " + strings.Join(holes, ",") + t.dialect.OnConflict
+	//
+	// A globally unique collection is the exception. There, a repeat is not a
+	// duplicate of this row but a claim another row already owns, and
+	// suppressing it would drop the insert without a word — the binding would
+	// simply not exist. Let the constraint fire so the caller learns about it.
+	ignore, onConflict := t.dialect.Ignore, t.dialect.OnConflict
+	if f.IsGlobalUnique {
+		ignore, onConflict = t.dialect.PlainInsert(), ""
+	}
+	query := ignore + "INTO " + tbl + " (" + strings.Join(cols, ",") +
+		") VALUES " + strings.Join(holes, ",") + onConflict
 	_, err := ex.Exec(query, args...)
-	return err
+	return Normalize(err)
 }
 
 func (t *SQLTable[T]) clearChild(ex Execer, f FieldInfo, pk FieldInfo, pkVal any) error {
