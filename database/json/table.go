@@ -103,9 +103,88 @@ func (t *Table[T]) Ins(val T, opts database.Options) error {
 	key := t.keyOf(row)
 
 	return t.store.update(func(f file) error {
+		if err := t.checkGlobal(f, key, row); err != nil {
+			return err
+		}
 		rows(f, t.name)[key] = raw
 		return nil
 	})
+}
+
+// checkGlobal reports ErrDuplicate when a value in one of the model's
+// `child,global` collections is already claimed by a different row.
+//
+// The SQL backends get this from a UNIQUE constraint on the companion table.
+// The JSON file has no DDL to lean on, so the claim is checked by walking the
+// table instead — linear, like every other non-key lookup in this backend.
+func (t *Table[T]) checkGlobal(f file, key string, row reflect.Value) error {
+	guarded := make([]database.FieldInfo, 0, len(t.schema.Collections))
+	for _, c := range t.schema.Collections {
+		if c.IsGlobalUnique {
+			guarded = append(guarded, c)
+		}
+	}
+	if len(guarded) == 0 {
+		return nil
+	}
+
+	claimed := make(map[string]map[string]bool, len(guarded))
+	for _, gf := range guarded {
+		claimed[gf.GoFieldName] = claimedValues(row.Field(gf.Index))
+	}
+
+	for _, otherKey := range sortedKeys(rowsOf(f, t.name)) {
+		if otherKey == key {
+			continue // the row being rewritten keeps its own claims
+		}
+		var other map[string]any
+		if err := json.Unmarshal(rowsOf(f, t.name)[otherKey], &other); err != nil {
+			continue // an unreadable row is a decode problem, not a claim
+		}
+		for _, gf := range guarded {
+			held := jsonValues(other[gf.GoFieldName])
+			for v := range claimed[gf.GoFieldName] {
+				if held[v] {
+					return fmt.Errorf("json: %w: %s already holds %q", database.ErrDuplicate, gf.GoFieldName, v)
+				}
+			}
+		}
+	}
+	return nil
+}
+
+// claimedValues renders a collection field as the set of values it asserts.
+func claimedValues(v reflect.Value) map[string]bool {
+	out := make(map[string]bool)
+	switch v.Kind() {
+	case reflect.Slice, reflect.Array:
+		for i := 0; i < v.Len(); i++ {
+			out[database.KeyString(v.Index(i))] = true
+		}
+	case reflect.Map:
+		iter := v.MapRange()
+		for iter.Next() {
+			out[database.KeyString(iter.Key())] = true
+		}
+	}
+	return out
+}
+
+// jsonValues renders an already-decoded collection as the same set. A slice
+// contributes its elements, a map its keys, matching claimedValues.
+func jsonValues(v any) map[string]bool {
+	out := make(map[string]bool)
+	switch x := v.(type) {
+	case []any:
+		for _, e := range x {
+			out[fmt.Sprintf("%v", e)] = true
+		}
+	case map[string]any:
+		for k := range x {
+			out[k] = true
+		}
+	}
+	return out
 }
 
 // Get reads the matching rows. An empty opts.Where returns the whole table,
@@ -252,6 +331,9 @@ func (t *Table[T]) Set(old, updated T, opts database.Options) error {
 			}
 			raw, err := t.encode(row)
 			if err != nil {
+				return err
+			}
+			if err := t.checkGlobal(f, key, row); err != nil {
 				return err
 			}
 			existing[key] = raw
