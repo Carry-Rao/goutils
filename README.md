@@ -14,7 +14,7 @@ go get github.com/Carry-Rao/goutils
 
 | Module | Description | Docs |
 |--------|-------------|------|
-| Database | SQL `Database[T]` / `Table[T]` over MySQL, PostgreSQL, and SQLite, plus a file-backed JSON backend. Conditions, transactions, and slice/map fields | [EN](docs/database_en.md) · [中文](docs/database_zh.md) |
+| Database | SQL `Database[T]` / `Table[T]` over MySQL, PostgreSQL, and SQLite, plus a file-backed JSON backend. Conditions, transactions, slice/map fields, and portable unique-violation detection | [EN](docs/database_en.md) · [中文](docs/database_zh.md) |
 | Cache | Key-value `Table[T]` over memory, Redis, and bloom filter, chainable via `mixture` | [EN](docs/database_en.md#cache-module) · [中文](docs/database_zh.md#cache-模块) |
 | HTTP Router | Prefix-tree router with typed path variables, middleware, per-pattern CORS, and correct 404/405 handling | [EN](docs/http_en.md) · [中文](docs/http_zh.md) |
 | Log | Buffered multi-level logging with color output | [EN](docs/log_en.md) · [中文](docs/log_zh.md) |
