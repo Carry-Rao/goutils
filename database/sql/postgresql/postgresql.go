@@ -3,12 +3,14 @@ package postgresql
 
 import (
 	"database/sql"
+	"errors"
 	"fmt"
 	"net"
 	"net/url"
 
 	"github.com/Carry-Rao/goutils/database"
 
+	"github.com/jackc/pgx/v5/pgconn"
 	_ "github.com/jackc/pgx/v5/stdlib"
 )
 
@@ -16,7 +18,18 @@ type Database[T any] struct {
 	database.Backend[T]
 }
 
-func init() { database.Register("postgresql") }
+func init() {
+	database.Register("postgresql")
+	database.Classify(isDuplicate)
+}
+
+// isDuplicate recognises SQLSTATE 23505, unique_violation. The stdlib driver
+// wraps the server error, so errors.As is what reaches it rather than a type
+// assertion.
+func isDuplicate(err error) bool {
+	var pe *pgconn.PgError
+	return errors.As(err, &pe) && pe.Code == "23505"
+}
 
 // NewDatabase opens a connection. Recognised keys are user, password, host,
 // port, dbname and sslmode; any other key is appended to the query string, so
