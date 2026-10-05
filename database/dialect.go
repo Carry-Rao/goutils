@@ -1,6 +1,9 @@
 package database
 
-import "reflect"
+import (
+	"reflect"
+	"strings"
+)
 
 // Dialect captures the two things that differ between the SQL backends:
 // identifier quoting and bind-parameter style. Everything else is shared, so a
@@ -26,6 +29,23 @@ var (
 	// SQLite dialect.
 	SQLiteDialect = Dialect{ParamStyle: "q", AutoInc: "AUTOINCREMENT", Ignore: "INSERT OR IGNORE "}
 )
+
+// PlainInsert is the bare INSERT keyword, for statements that must not
+// suppress constraint violations.
+//
+// It is derived from Ignore because Ignore's spelling carries the keyword
+// along with the modifier — "INSERT OR IGNORE " for SQLite, "INSERT IGNORE "
+// for MySQL, and empty for PostgreSQL, which spells the suppression as a
+// trailing OnConflict instead. Taking the first field keeps each dialect's own
+// SQL rather than hardcoding one here.
+func (d Dialect) PlainInsert() string {
+	if d.Ignore != "" {
+		if first := strings.Fields(d.Ignore); len(first) > 0 {
+			return first[0] + " "
+		}
+	}
+	return "INSERT "
+}
 
 // Quote wraps an identifier for the dialect.
 func (d Dialect) Quote(s string) string {
