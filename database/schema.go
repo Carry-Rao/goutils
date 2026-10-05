@@ -24,6 +24,13 @@ type FieldInfo struct {
 	IsChild    bool
 	ChildTable string // overrides the derived table name
 	GoElem     reflect.Type
+
+	// IsGlobalUnique makes a collection's values unique across the whole
+	// companion table rather than only within one parent row. The default
+	// UNIQUE(column, parent) lets the same value sit under two different
+	// parents; this constraint forbids that, which is what an ownership claim
+	// needs — an OAuth identity may belong to exactly one account.
+	IsGlobalUnique bool
 }
 
 // Schema is the parsed, cached form of a model type.
@@ -129,6 +136,7 @@ func buildSchema(typ reflect.Type) *Schema {
 //	`db:",primary"`             column from the field name, marked primary
 //	`db:",child"`               stored in a companion table
 //	`db:",child=tag_links"`     companion table named explicitly
+//	`db:",child,global"`        companion rows unique across all parents
 func parseField(f reflect.StructField, index int) (FieldInfo, error) {
 	field := FieldInfo{
 		Index:       index,
@@ -157,6 +165,8 @@ func parseField(f reflect.StructField, index int) (FieldInfo, error) {
 		case "child":
 			field.IsChild = true
 			field.ChildTable = value
+		case "global":
+			field.IsGlobalUnique = true
 		default:
 			return field, fmt.Errorf("unknown db constraint %q", name)
 		}
@@ -164,6 +174,11 @@ func parseField(f reflect.StructField, index int) (FieldInfo, error) {
 
 	if err := applyKind(&field, f.Type); err != nil {
 		return field, err
+	}
+	// global only means something for a companion table: on a column it would
+	// silently do nothing, and a caller who wrote it expects uniqueness.
+	if field.IsGlobalUnique && !field.IsChild {
+		return field, fmt.Errorf("db constraint %q needs a collection: %q is a plain column", "global", field.GoFieldName)
 	}
 	return field, nil
 }
